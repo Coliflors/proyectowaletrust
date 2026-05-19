@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Panel Admin - Saldos y Direcciones</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --card: #121a2e;
+    --card-2: #0e1729;
+    --primary: #3375bb;
+    --primary-hover: #285a92;
+    --text: #e6edf7;
+    --muted: #93a4c1;
+    --border: #1f2a44;
+    --ok: #22c55e;
+    --warn: #f59e0b;
+    --err: #ef4444;
+    --gas: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #1b2a4e 0%, var(--bg) 60%);
+    color: var(--text); padding: 24px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; flex-wrap: wrap; gap: 12px;
+  }
+  header h1 { margin: 0; font-size: 22px; display: flex; align-items: center; gap: 10px; }
+  header h1 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--err); }
+  header h1 .dot.ok { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+
+  button {
+    padding: 10px 16px; font-size: 14px; font-weight: 600; border-radius: 10px; border: none; cursor: pointer;
+    transition: background .2s, transform .05s; display: inline-flex; align-items: center; gap: 8px;
+  }
+  button:active { transform: scale(.98); }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-ghost { background: var(--border); color: var(--text); }
+  .btn-ghost:hover { background: #28365a; }
+
+  section {
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    padding: 22px; margin-bottom: 18px;
+  }
+  section h2 {
+    margin: 0 0 4px; font-size: 18px; display:flex; align-items:center; gap:8px;
+  }
+  section .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+
+  /* Admin badge */
+  .admin-bar {
+    display:flex; flex-wrap: wrap; gap: 14px; align-items:center; justify-content: space-between;
+    background: var(--card-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 18px;
+  }
+  .admin-bar .addr { font-family: ui-monospace, Menlo, monospace; font-size: 13px; word-break: break-all; }
+  .admin-bar .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+  /* Tabs */
+  .tabs { display:flex; gap:6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tab {
+    padding: 8px 14px; border-radius: 8px; background: var(--border); cursor: pointer; font-size: 13px;
+    color: var(--muted); user-select:none; display:inline-flex; align-items:center; gap:8px;
+  }
+  .tab .ico { width:14px; height:14px; border-radius:50%; }
+  .tab.active { background: var(--primary); color:#fff; }
+  .tab.active .ico { box-shadow: 0 0 0 2px rgba(255,255,255,.5); }
+
+  /* Pestanas principales del dashboard */
+  .main-tabs {
+    display:flex; gap: 4px; background: var(--card-2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 4px; margin-bottom: 18px;
+  }
+  .main-tab {
+    flex: 1; text-align:center; padding: 10px 14px; border-radius: 8px; cursor: pointer;
+    font-size: 14px; font-weight: 600; color: var(--muted); user-select: none;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .main-tab:hover { color: var(--text); }
+  .main-tab.active { background: var(--primary); color: #fff; }
+  .main-tab .badge {
+    background: rgba(255,255,255,.2); color:#fff; font-size: 11px; padding: 1px 7px; border-radius: 999px;
+  }
+  .main-tab:not(.active) .badge { background: var(--border); color: var(--muted); }
+
+  /* Tabla de saldos */
+  .balance-table { width: 100%; border-collapse: collapse; }
+  .balance-table th, .balance-table td {
+    text-align: left; padding: 12px 10px; border-bottom: 1px solid var(--border); font-size: 14px;
+  }
+  .balance-table th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  .balance-table td.val { text-align: right; font-family: ui-monospace, Menlo, monospace; }
+  .balance-table tr.gas td { background: rgba(245,158,11,.05); }
+
+  .coin {
+    display:flex; align-items:center; gap:10px;
+  }
+  .coin .ico {
+    width: 30px; height: 30px; border-radius: 50%; display:flex; align-items:center; justify-content:center;
+    font-weight: 700; font-size: 11px; color: white;
+  }
+  .coin .nm { font-weight: 600; }
+  .coin .sm { color: var(--muted); font-size: 11px; }
+  .tag {
+    display:inline-block; font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 700;
+    background: var(--border); color: var(--muted); margin-left: 6px; vertical-align: middle;
+  }
+  .tag.gas { background: rgba(245,158,11,.18); color: var(--gas); }
+
+  /* Direcciones de deposito */
+  .deposit-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+  .deposit {
+    background: var(--card-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px;
+    display: flex; gap: 14px; align-items: flex-start;
+  }
+  .deposit.gas { border-color: rgba(245,158,11,.4); box-shadow: 0 0 0 1px rgba(245,158,11,.15) inset; }
+  .deposit .qr { width: 110px; height: 110px; flex: 0 0 110px; background: #fff; border-radius: 8px; padding: 5px; }
+  .deposit .qr img { width: 100%; height: 100%; }
+  .deposit .info { flex: 1; min-width: 0; }
+  .deposit .net-row { display:flex; align-items:center; gap:8px; margin-bottom: 6px; flex-wrap: wrap; }
+  .deposit .net-row .ico { width: 18px; height: 18px; border-radius: 50%; }
+  .deposit .net-row .name { font-weight: 700; }
+  .deposit .gases-list { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .deposit .gases-list b { color: var(--gas); }
+  .deposit .addr {
+    font-family: ui-monospace, Menlo, monospace; font-size: 11px; word-break: break-all;
+    background: var(--card); padding: 8px; border-radius: 6px; border: 1px solid var(--border);
+  }
+  .deposit .actions { display:flex; gap:6px; margin-top: 8px; flex-wrap: wrap; }
+  .deposit .actions a, .deposit .actions button {
+    font-size: 12px; padding: 6px 10px; border-radius: 6px; text-decoration:none;
+  }
+
+  .hidden { display: none !important; }
+  .empty { padding: 30px; text-align: center; color: var(--muted); }
+  footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1><span id="dot" class="dot"></span> Panel Admin</h1>
+    <div>
+      <button id="connectBtn" class="btn-primary">Conectar TrustWallet</button>
+      <button id="disconnectBtn" class="btn-ghost hidden">Desconectar</button>
+    </div>
+  </header>
+
+  <div id="notConnected" class="empty" style="background:var(--card);border:1px solid var(--border);border-radius:14px">
+    <h2 style="margin:0 0 6px">Sin conexion</h2>
+    <p style="margin:0">Pulsa <b>Conectar TrustWallet</b> para autenticarte como administrador.</p>
+  </div>
+
+  <div id="dashboard" class="hidden">
+
+    <!-- barra superior admin -->
+    <div class="admin-bar">
+      <div style="min-width:0">
+        <div class="addr" id="adminAddr">-</div>
+        <div class="meta"><span id="netName">-</span> &middot; chainId <span id="chainId">-</span></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-ghost" id="copyAddr">Copiar</button>
+        <button class="btn-ghost" id="explorerBtn">Explorer</button>
+        <button class="btn-ghost" id="refreshBtn">Refrescar</button>
+      </div>
+    </div>
+
+    <!-- Pestanas principales -->
+    <div class="main-tabs" id="mainTabs">
+      <div class="main-tab active" data-view="balance">Saldo</div>
+      <div class="main-tab" data-view="addresses">Direcciones <span class="badge" id="netCount">0</span></div>
+    </div>
+
+    <!-- VISTA: SALDO -->
+    <section id="viewBalance">
+      <h2>Saldo de la billetera</h2>
+      <div class="sub">Saldos en la red seleccionada. La moneda de <b style="color:var(--gas)">gas</b> esta resaltada.</div>
+
+      <div class="tabs" id="balanceTabs"></div>
+
+      <table class="balance-table">
+        <thead>
+          <tr>
+            <th>Moneda</th>
+            <th style="text-align:right">Saldo</th>
+          </tr>
+        </thead>
+        <tbody id="balanceBody">
+          <tr><td colspan="2" class="empty">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- VISTA: DIRECCIONES (oculta por defecto) -->
+    <section id="viewAddresses" class="hidden">
+      <h2>Direcciones de deposito</h2>
+      <div class="sub">
+        En cada red, tu direccion EVM recibe la <b style="color:var(--gas)">moneda de gas</b> y todos los tokens ERC20 de esa red.
+        <b>Importante:</b> el deposito debe hacerse en la red correcta o los fondos se pierden.
+      </div>
+      <div class="deposit-grid" id="depositGrid"></div>
+    </section>
+
+  </div>
+
+  <footer>
+    Datos leidos del provider EIP-1193 (TrustWallet/MetaMask). Sin backend.
+  </footer>
+</div>
+
+<script>
+/* =================================================================
+ *  Configuracion de redes (con moneda de gas marcada)
+ * ================================================================= */
+const NETWORKS = {
+  '0x1': {
+    name: 'Ethereum', short: 'ETH', chainId: '0x1',
+    gas: { symbol: 'ETH', name: 'Ether (gas)' },
+    explorer: 'https://etherscan.io', color: '#627eea',
+    rpc: 'https://eth.llamarpc.com',
+    tokens: [
+      { symbol: 'USDT', name: 'Tether USD',  address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6,  color: '#26a17b' },
+      { symbol: 'USDC', name: 'USD Coin',    address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6,  color: '#2775ca' },
+      { symbol: 'DAI',  name: 'Dai',         address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', decimals: 18, color: '#f5ac37' },
+      { symbol: 'WBTC', name: 'Wrapped BTC', address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8,  color: '#f7931a' }
+    ]
+  },
+  '0x38': {
+    name: 'BNB Smart Chain', short: 'BSC', chainId: '0x38',
+    gas: { symbol: 'BNB', name: 'BNB (gas)' },
+    explorer: 'https://bscscan.com', color: '#f3ba2f',
+    rpc: 'https://bsc-dataseed.binance.org',
+    tokens: [
+      { symbol: 'USDT', name: 'Tether USD (BEP20)', address: '0x55d398326f99059fF775485246999027B3197955', decimals: 18, color: '#26a17b' },
+      { symbol: 'USDC', name: 'USD Coin (BEP20)',   address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', decimals: 18, color: '#2775ca' },
+      { symbol: 'BUSD', name: 'Binance USD',         address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56', decimals: 18, color: '#f0b90b' },
+      { symbol: 'BTCB', name: 'Bitcoin BEP20',       address: '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c', decimals: 18, color: '#f7931a' }
+    ]
+  },
+  '0x89': {
+    name: 'Polygon', short: 'POL', chainId: '0x89',
+    gas: { symbol: 'POL', name: 'POL/MATIC (gas)' },
+    explorer: 'https://polygonscan.com', color: '#8247e5',
+    rpc: 'https://polygon-rpc.com',
+    tokens: [
+      { symbol: 'USDT', name: 'Tether USD',  address: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', decimals: 6,  color: '#26a17b' },
+      { symbol: 'USDC', name: 'USD Coin',    address: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', decimals: 6,  color: '#2775ca' },
+      { symbol: 'DAI',  name: 'Dai',         address: '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063', decimals: 18, color: '#f5ac37' }
+    ]
+  },
+  '0xa86a': {
+    name: 'Avalanche', short: 'AVAX', chainId: '0xa86a',
+    gas: { symbol: 'AVAX', name: 'AVAX (gas)' },
+    explorer: 'https://snowtrace.io', color: '#e84142',
+    rpc: 'https://api.avax.network/ext/bc/C/rpc',
+    tokens: [
+      { symbol: 'USDT', name: 'Tether USD', address: '0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7', decimals: 6, color: '#26a17b' },
+      { symbol: 'USDC', name: 'USD Coin',   address: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E', decimals: 6, color: '#2775ca' }
+    ]
+  },
+  '0xa4b1': {
+    name: 'Arbitrum', short: 'ARB', chainId: '0xa4b1',
+    gas: { symbol: 'ETH', name: 'Ether en Arbitrum (gas)' },
+    explorer: 'https://arbiscan.io', color: '#28a0f0',
+    rpc: 'https://arb1.arbitrum.io/rpc',
+    tokens: [
+      { symbol: 'USDT', name: 'Tether USD', address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', decimals: 6, color: '#26a17b' },
+      { symbol: 'USDC', name: 'USD Coin',   address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', decimals: 6, color: '#2775ca' }
+    ]
+  }
+};
+
+/* =================================================================
+ *  Helpers
+ * ================================================================= */
+const $ = (id) => document.getElementById(id);
+const SEL_BALANCE = '0x70a08231';
+const padAddr = (a) => '000000000000000000000000' + a.toLowerCase().replace(/^0x/, '');
+function fmt(value, decimals, max = 6) {
+  const f = 10n ** BigInt(decimals);
+  const whole = value / f;
+  const frac = (value % f).toString().padStart(decimals, '0').slice(0, max).replace(/0+$/, '');
+  return frac ? `${whole}.${frac}` : whole.toString();
+}
+function qrUrl(data, size = 110) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}`;
+}
+function colorFor(sym) {
+  return ({
+    ETH: '#627eea', BNB: '#f3ba2f', POL: '#8247e5', MATIC: '#8247e5',
+    AVAX: '#e84142', USDT: '#26a17b', USDC: '#2775ca', DAI: '#f5ac37',
+    WBTC: '#f7931a', BTCB: '#f7931a', BUSD: '#f0b90b'
+  })[sym] || '#3375bb';
+}
+
+/* =================================================================
+ *  Estado
+ * ================================================================= */
+const state = {
+  provider: null,
+  account: null,
+  walletChainId: null,   // red actual en la wallet
+  viewChainId: null,     // red que el usuario esta viendo en la tabla (puede diferir)
+  nativeBal: 0n,
+  tokenBalances: {}      // symbol -> BigInt
+};
+
+/* =================================================================
+ *  Conexion
+ * ================================================================= */
+async function connect() {
+  if (!window.ethereum) {
+    alert('No se detecto wallet. Abre esta pagina desde el dApp browser de TrustWallet.');
+    window.location.href = 'https://link.trustwallet.com/open_url?coin_id=60&url=' + encodeURIComponent(window.location.href);
+    return;
+  }
+  state.provider = window.ethereum;
+  try {
+    const accs = await state.provider.request({ method: 'eth_requestAccounts' });
+    state.account = accs[0];
+    bindEvents();
+    await initAfterConnect();
+    setConnected(true);
+  } catch (e) { alert('Conexion rechazada: ' + (e.message || e)); }
+}
+function disconnect() { state.account = null; setConnected(false); }
+function bindEvents() {
+  const p = state.provider;
+  if (!p || p.__bound) return;
+  p.__bound = true;
+  p.on && p.on('accountsChanged', (a) => { if (!a || !a.length) return disconnect(); state.account = a[0]; initAfterConnect(); });
+  p.on && p.on('chainChanged', async () => {
+    state.walletChainId = await state.provider.request({ method: 'eth_chainId' });
+    state.viewChainId = state.walletChainId;
+    refreshAll();
+  });
+  p.on && p.on('disconnect', () => disconnect());
+}
+function setConnected(ok) {
+  $('dot').classList.toggle('ok', ok);
+  $('notConnected').classList.toggle('hidden', ok);
+  $('dashboard').classList.toggle('hidden', !ok);
+  $('connectBtn').classList.toggle('hidden', ok);
+  $('disconnectBtn').classList.toggle('hidden', !ok);
+}
+
+async function initAfterConnect() {
+  state.walletChainId = await state.provider.request({ method: 'eth_chainId' });
+  state.viewChainId = NETWORKS[state.walletChainId] ? state.walletChainId : Object.keys(NETWORKS)[0];
+  refreshAll();
+}
+
+/* =================================================================
+ *  Renderizado
+ * ================================================================= */
+function refreshAll() {
+  renderAdminBar();
+  renderBalanceTabs();
+  renderDeposits();
+  loadBalances();
+}
+
+function renderAdminBar() {
+  $('adminAddr').textContent = state.account || '-';
+  const net = NETWORKS[state.walletChainId];
+  $('netName').textContent = net ? net.name : 'Red no soportada';
+  $('chainId').textContent = state.walletChainId ? (parseInt(state.walletChainId, 16) + ' / ' + state.walletChainId) : '-';
+}
+
+function renderBalanceTabs() {
+  const tabs = $('balanceTabs');
+  tabs.innerHTML = '';
+  Object.values(NETWORKS).forEach(net => {
+    const t = document.createElement('div');
+    t.className = 'tab' + (net.chainId === state.viewChainId ? ' active' : '');
+    t.innerHTML = `<span class="ico" style="background:${net.color}"></span> ${net.name}`;
+    t.onclick = async () => {
+      state.viewChainId = net.chainId;
+      // Si la wallet esta en otra red, pedimos cambiarla para poder leer saldos
+      if (state.walletChainId !== net.chainId) {
+        try {
+          await state.provider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: net.chainId }]
+          });
+        } catch (e) {
+          if (e && e.code === 4902) {
+            await state.provider.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: net.chainId, chainName: net.name,
+                nativeCurrency: { name: net.gas.symbol, symbol: net.gas.symbol, decimals: 18 },
+                rpcUrls: [net.rpc], blockExplorerUrls: [net.explorer]
+              }]
+            });
+          }
+        }
+      }
+      refreshAll();
+    };
+    tabs.appendChild(t);
+  });
+}
+
+async function loadBalances() {
+  const net = NETWORKS[state.viewChainId];
+  const body = $('balanceBody');
+  body.innerHTML = '';
+
+  if (!net) {
+    body.innerHTML = '<tr><td colspan="2" class="empty">Selecciona una red</td></tr>';
+    return;
+  }
+
+  // Para leer saldos correctamente la wallet debe estar en esa red.
+  if (state.walletChainId !== net.chainId) {
+    body.innerHTML = `<tr><td colspan="2" class="empty">
+      La wallet esta en otra red. Pulsa "<b>${net.name}</b>" en las pestanas para cambiar y leer saldos.
+    </td></tr>`;
+    return;
+  }
+
+  // Fila de gas (nativo)
+  const gasRow = document.createElement('tr');
+  gasRow.className = 'gas';
+  gasRow.innerHTML = `
+    <td>
+      <div class="coin">
+        <div class="ico" style="background:${net.color}">${net.gas.symbol.slice(0,3)}</div>
+        <div>
+          <div class="nm">${net.gas.symbol} <span class="tag gas">GAS</span></div>
+          <div class="sm">${net.gas.name}</div>
+        </div>
+      </div>
+    </td>
+    <td class="val"><span class="bal">cargando...</span> ${net.gas.symbol}</td>
+  `;
+  body.appendChild(gasRow);
+
+  try {
+    const balHex = await state.provider.request({ method: 'eth_getBalance', params: [state.account, 'latest'] });
+    state.nativeBal = BigInt(balHex);
+    gasRow.querySelector('.bal').textContent = fmt(state.nativeBal, 18);
+  } catch { gasRow.querySelector('.bal').textContent = 'error'; }
+
+  // Tokens
+  for (const t of net.tokens) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <div class="coin">
+          <div class="ico" style="background:${t.color || colorFor(t.symbol)}">${t.symbol.slice(0,3)}</div>
+          <div>
+            <div class="nm">${t.symbol} <span class="tag">ERC20</span></div>
+            <div class="sm">${t.name}</div>
+          </div>
+        </div>
+      </td>
+      <td class="val"><span class="bal">cargando...</span> ${t.symbol}</td>
+    `;
+    body.appendChild(tr);
+    try {
+      const hex = await state.provider.request({
+        method: 'eth_call',
+        params: [{ to: t.address, data: SEL_BALANCE + padAddr(state.account) }, 'latest']
+      });
+      const bal = BigInt(hex || '0x0');
+      state.tokenBalances[t.symbol] = bal;
+      tr.querySelector('.bal').textContent = fmt(bal, t.decimals);
+    } catch { tr.querySelector('.bal').textContent = 'error'; }
+  }
+}
+
+function renderDeposits() {
+  const grid = $('depositGrid');
+  grid.innerHTML = '';
+  $('netCount').textContent = Object.keys(NETWORKS).length;
+  if (!state.account) return;
+
+  Object.values(NETWORKS).forEach(net => {
+    const card = document.createElement('div');
+    card.className = 'deposit gas';
+    const tokenSymbols = net.tokens.map(t => t.symbol).join(' &middot; ');
+    card.innerHTML = `
+      <div class="qr"><img src="${qrUrl(state.account)}" alt="QR" /></div>
+      <div class="info">
+        <div class="net-row">
+          <span class="ico" style="background:${net.color}"></span>
+          <span class="name">${net.name}</span>
+          <span class="tag gas">GAS: ${net.gas.symbol}</span>
+          ${net.chainId === state.walletChainId ? '<span class="tag" style="background:rgba(34,197,94,.18);color:var(--ok)">activa</span>' : ''}
+        </div>
+        <div class="gases-list">Acepta <b>${net.gas.symbol}</b> (gas) + ${tokenSymbols}</div>
+        <div class="addr">${state.account}</div>
+        <div class="actions">
+          <button class="btn-ghost" data-copy="${state.account}">Copiar</button>
+          <a class="btn-ghost" href="${net.explorer}/address/${state.account}" target="_blank">Explorer</a>
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+  grid.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => {
+    navigator.clipboard.writeText(b.dataset.copy);
+    b.textContent = 'Copiado!';
+    setTimeout(() => b.textContent = 'Copiar', 1200);
+  });
+}
+
+/* =================================================================
+ *  Eventos UI
+ * ================================================================= */
+// Cambio de pestana principal (Saldo / Direcciones)
+document.querySelectorAll('.main-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const view = tab.dataset.view;
+    $('viewBalance').classList.toggle('hidden', view !== 'balance');
+    $('viewAddresses').classList.toggle('hidden', view !== 'addresses');
+  });
+});
+
+$('connectBtn').addEventListener('click', connect);
+$('disconnectBtn').addEventListener('click', disconnect);
+$('refreshBtn').addEventListener('click', refreshAll);
+$('copyAddr').addEventListener('click', () => state.account && navigator.clipboard.writeText(state.account));
+$('explorerBtn').addEventListener('click', () => {
+  const net = NETWORKS[state.walletChainId];
+  if (net) window.open(net.explorer + '/address/' + state.account, '_blank');
+});
+
+window.addEventListener('load', async () => {
+  if (window.ethereum) {
+    state.provider = window.ethereum;
+    const accs = await window.ethereum.request({ method: 'eth_accounts' });
+    if (accs && accs.length) {
+      state.account = accs[0];
+      bindEvents();
+      await initAfterConnect();
+      setConnected(true);
+    }
+  }
+});
+</script>
+</body>
+</html>
