@@ -47,12 +47,9 @@
     background: var(--card); border: 1px solid var(--border); border-radius: 16px;
     padding: 22px; margin-bottom: 18px;
   }
-  section h2 {
-    margin: 0 0 4px; font-size: 18px; display:flex; align-items:center; gap:8px;
-  }
+  section h2 { margin: 0 0 4px; font-size: 18px; display:flex; align-items:center; gap:8px; }
   section .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
 
-  /* Admin badge */
   .admin-bar {
     display:flex; flex-wrap: wrap; gap: 14px; align-items:center; justify-content: space-between;
     background: var(--card-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 18px;
@@ -60,7 +57,7 @@
   .admin-bar .addr { font-family: ui-monospace, Menlo, monospace; font-size: 13px; word-break: break-all; }
   .admin-bar .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
 
-  /* Tabs */
+  /* Tabs de redes (saldo) */
   .tabs { display:flex; gap:6px; flex-wrap: wrap; margin-bottom: 14px; }
   .tab {
     padding: 8px 14px; border-radius: 8px; background: var(--border); cursor: pointer; font-size: 13px;
@@ -70,7 +67,7 @@
   .tab.active { background: var(--primary); color:#fff; }
   .tab.active .ico { box-shadow: 0 0 0 2px rgba(255,255,255,.5); }
 
-  /* Pestanas principales del dashboard */
+  /* Pestanas principales (Saldo / Direcciones) */
   .main-tabs {
     display:flex; gap: 4px; background: var(--card-2); border: 1px solid var(--border);
     border-radius: 12px; padding: 4px; margin-bottom: 18px;
@@ -96,9 +93,7 @@
   .balance-table td.val { text-align: right; font-family: ui-monospace, Menlo, monospace; }
   .balance-table tr.gas td { background: rgba(245,158,11,.05); }
 
-  .coin {
-    display:flex; align-items:center; gap:10px;
-  }
+  .coin { display:flex; align-items:center; gap:10px; }
   .coin .ico {
     width: 30px; height: 30px; border-radius: 50%; display:flex; align-items:center; justify-content:center;
     font-weight: 700; font-size: 11px; color: white;
@@ -135,6 +130,9 @@
     font-size: 12px; padding: 6px 10px; border-radius: 6px; text-decoration:none;
   }
 
+  .pill { display:inline-block; padding: 2px 8px; border-radius:999px; font-size: 11px; font-weight:600; background: var(--border); color: var(--muted); }
+  .pill.ok { background: rgba(34,197,94,.15); color: var(--ok); }
+
   .hidden { display: none !important; }
   .empty { padding: 30px; text-align: center; color: var(--muted); }
   footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 20px; }
@@ -153,7 +151,7 @@
 
   <div id="notConnected" class="empty" style="background:var(--card);border:1px solid var(--border);border-radius:14px">
     <h2 style="margin:0 0 6px">Sin conexion</h2>
-    <p style="margin:0">Pulsa <b>Conectar TrustWallet</b> para autenticarte como administrador.</p>
+    <p style="margin:0">Pulsa <b>Conectar TrustWallet</b>. Se abrira un QR (escritorio) o tu wallet directamente (movil).</p>
   </div>
 
   <div id="dashboard" class="hidden">
@@ -162,7 +160,10 @@
     <div class="admin-bar">
       <div style="min-width:0">
         <div class="addr" id="adminAddr">-</div>
-        <div class="meta"><span id="netName">-</span> &middot; chainId <span id="chainId">-</span></div>
+        <div class="meta">
+          <span id="netName">-</span> &middot; chainId <span id="chainId">-</span>
+          &middot; <span id="source" class="pill">-</span>
+        </div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-ghost" id="copyAddr">Copiar</button>
@@ -197,7 +198,7 @@
       </table>
     </section>
 
-    <!-- VISTA: DIRECCIONES (oculta por defecto) -->
+    <!-- VISTA: DIRECCIONES -->
     <section id="viewAddresses" class="hidden">
       <h2>Direcciones de deposito</h2>
       <div class="sub">
@@ -210,14 +211,19 @@
   </div>
 
   <footer>
-    Datos leidos del provider EIP-1193 (TrustWallet/MetaMask). Sin backend.
+    Conexion via WalletConnect v2 (gratuita). Sin backend.
   </footer>
 </div>
 
-<script>
-/* =================================================================
- *  Configuracion de redes (con moneda de gas marcada)
- * ================================================================= */
+<script type="module">
+import {
+  connectWallet, disconnectWallet, restoreSession, switchChain,
+  getNativeBalance, getErc20Balance, fmtUnits
+} from './js/wallet.js';
+
+/* ============================================================
+ *  Configuracion de redes
+ * ============================================================ */
 const NETWORKS = {
   '0x1': {
     name: 'Ethereum', short: 'ETH', chainId: '0x1',
@@ -276,72 +282,72 @@ const NETWORKS = {
   }
 };
 
-/* =================================================================
+/* ============================================================
  *  Helpers
- * ================================================================= */
+ * ============================================================ */
 const $ = (id) => document.getElementById(id);
-const SEL_BALANCE = '0x70a08231';
-const padAddr = (a) => '000000000000000000000000' + a.toLowerCase().replace(/^0x/, '');
-function fmt(value, decimals, max = 6) {
-  const f = 10n ** BigInt(decimals);
-  const whole = value / f;
-  const frac = (value % f).toString().padStart(decimals, '0').slice(0, max).replace(/0+$/, '');
-  return frac ? `${whole}.${frac}` : whole.toString();
-}
-function qrUrl(data, size = 110) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}`;
-}
-function colorFor(sym) {
-  return ({
-    ETH: '#627eea', BNB: '#f3ba2f', POL: '#8247e5', MATIC: '#8247e5',
-    AVAX: '#e84142', USDT: '#26a17b', USDC: '#2775ca', DAI: '#f5ac37',
-    WBTC: '#f7931a', BTCB: '#f7931a', BUSD: '#f0b90b'
-  })[sym] || '#3375bb';
-}
+const qrUrl = (data, size = 110) => `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}`;
 
-/* =================================================================
+/* ============================================================
  *  Estado
- * ================================================================= */
+ * ============================================================ */
 const state = {
   provider: null,
   account: null,
-  walletChainId: null,   // red actual en la wallet
-  viewChainId: null,     // red que el usuario esta viendo en la tabla (puede diferir)
-  nativeBal: 0n,
-  tokenBalances: {}      // symbol -> BigInt
+  source: null,            // 'walletconnect' | 'injected'
+  walletChainId: null,
+  viewChainId: null,
+  nativeBal: 0n
 };
 
-/* =================================================================
+/* ============================================================
  *  Conexion
- * ================================================================= */
+ * ============================================================ */
 async function connect() {
-  if (!window.ethereum) {
-    alert('No se detecto wallet. Abre esta pagina desde el dApp browser de TrustWallet.');
-    window.location.href = 'https://link.trustwallet.com/open_url?coin_id=60&url=' + encodeURIComponent(window.location.href);
-    return;
-  }
-  state.provider = window.ethereum;
   try {
-    const accs = await state.provider.request({ method: 'eth_requestAccounts' });
-    state.account = accs[0];
+    const s = await connectWallet();
+    state.provider = s.provider;
+    state.account = s.account;
+    state.walletChainId = s.chainId;
+    state.viewChainId = NETWORKS[s.chainId] ? s.chainId : Object.keys(NETWORKS)[0];
+    state.source = s.source;
     bindEvents();
-    await initAfterConnect();
     setConnected(true);
-  } catch (e) { alert('Conexion rechazada: ' + (e.message || e)); }
+    refreshAll();
+  } catch (e) {
+    if (e && (e.code === 4001 || /reject/i.test(e.message || ''))) {
+      alert('Conexion rechazada.');
+    } else {
+      alert('Error: ' + (e.message || e));
+    }
+  }
 }
-function disconnect() { state.account = null; setConnected(false); }
+
+async function disconnect() {
+  await disconnectWallet();
+  state.provider = null;
+  state.account = null;
+  setConnected(false);
+}
+
 function bindEvents() {
   const p = state.provider;
   if (!p || p.__bound) return;
   p.__bound = true;
-  p.on && p.on('accountsChanged', (a) => { if (!a || !a.length) return disconnect(); state.account = a[0]; initAfterConnect(); });
-  p.on && p.on('chainChanged', async () => {
-    state.walletChainId = await state.provider.request({ method: 'eth_chainId' });
+  p.on && p.on('accountsChanged', (a) => {
+    if (!a || !a.length) return disconnect();
+    state.account = a[0];
+    refreshAll();
+  });
+  p.on && p.on('chainChanged', async (cid) => {
+    state.walletChainId = (typeof cid === 'string' && cid.startsWith('0x'))
+      ? cid : ('0x' + Number(cid).toString(16));
     state.viewChainId = state.walletChainId;
     refreshAll();
   });
   p.on && p.on('disconnect', () => disconnect());
 }
+
 function setConnected(ok) {
   $('dot').classList.toggle('ok', ok);
   $('notConnected').classList.toggle('hidden', ok);
@@ -350,15 +356,9 @@ function setConnected(ok) {
   $('disconnectBtn').classList.toggle('hidden', !ok);
 }
 
-async function initAfterConnect() {
-  state.walletChainId = await state.provider.request({ method: 'eth_chainId' });
-  state.viewChainId = NETWORKS[state.walletChainId] ? state.walletChainId : Object.keys(NETWORKS)[0];
-  refreshAll();
-}
-
-/* =================================================================
+/* ============================================================
  *  Renderizado
- * ================================================================= */
+ * ============================================================ */
 function refreshAll() {
   renderAdminBar();
   renderBalanceTabs();
@@ -370,7 +370,11 @@ function renderAdminBar() {
   $('adminAddr').textContent = state.account || '-';
   const net = NETWORKS[state.walletChainId];
   $('netName').textContent = net ? net.name : 'Red no soportada';
-  $('chainId').textContent = state.walletChainId ? (parseInt(state.walletChainId, 16) + ' / ' + state.walletChainId) : '-';
+  $('chainId').textContent = state.walletChainId
+    ? (parseInt(state.walletChainId, 16) + ' / ' + state.walletChainId) : '-';
+  const src = $('source');
+  src.textContent = state.source === 'walletconnect' ? 'WalletConnect v2' : 'Wallet inyectada';
+  src.className = 'pill ok';
 }
 
 function renderBalanceTabs() {
@@ -382,24 +386,18 @@ function renderBalanceTabs() {
     t.innerHTML = `<span class="ico" style="background:${net.color}"></span> ${net.name}`;
     t.onclick = async () => {
       state.viewChainId = net.chainId;
-      // Si la wallet esta en otra red, pedimos cambiarla para poder leer saldos
       if (state.walletChainId !== net.chainId) {
         try {
-          await state.provider.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: net.chainId }]
+          await switchChain(state.provider, net.chainId, {
+            chainId: net.chainId,
+            chainName: net.name,
+            nativeCurrency: { name: net.gas.symbol, symbol: net.gas.symbol, decimals: 18 },
+            rpcUrls: [net.rpc],
+            blockExplorerUrls: [net.explorer]
           });
         } catch (e) {
-          if (e && e.code === 4902) {
-            await state.provider.request({
-              method: 'wallet_addEthereumChain',
-              params: [{
-                chainId: net.chainId, chainName: net.name,
-                nativeCurrency: { name: net.gas.symbol, symbol: net.gas.symbol, decimals: 18 },
-                rpcUrls: [net.rpc], blockExplorerUrls: [net.explorer]
-              }]
-            });
-          }
+          alert('No se pudo cambiar de red: ' + (e.message || e));
+          return;
         }
       }
       refreshAll();
@@ -418,7 +416,6 @@ async function loadBalances() {
     return;
   }
 
-  // Para leer saldos correctamente la wallet debe estar en esa red.
   if (state.walletChainId !== net.chainId) {
     body.innerHTML = `<tr><td colspan="2" class="empty">
       La wallet esta en otra red. Pulsa "<b>${net.name}</b>" en las pestanas para cambiar y leer saldos.
@@ -444,18 +441,16 @@ async function loadBalances() {
   body.appendChild(gasRow);
 
   try {
-    const balHex = await state.provider.request({ method: 'eth_getBalance', params: [state.account, 'latest'] });
-    state.nativeBal = BigInt(balHex);
-    gasRow.querySelector('.bal').textContent = fmt(state.nativeBal, 18);
+    state.nativeBal = await getNativeBalance(state.provider, state.account);
+    gasRow.querySelector('.bal').textContent = fmtUnits(state.nativeBal, 18);
   } catch { gasRow.querySelector('.bal').textContent = 'error'; }
 
-  // Tokens
   for (const t of net.tokens) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>
         <div class="coin">
-          <div class="ico" style="background:${t.color || colorFor(t.symbol)}">${t.symbol.slice(0,3)}</div>
+          <div class="ico" style="background:${t.color}">${t.symbol.slice(0,3)}</div>
           <div>
             <div class="nm">${t.symbol} <span class="tag">ERC20</span></div>
             <div class="sm">${t.name}</div>
@@ -466,13 +461,8 @@ async function loadBalances() {
     `;
     body.appendChild(tr);
     try {
-      const hex = await state.provider.request({
-        method: 'eth_call',
-        params: [{ to: t.address, data: SEL_BALANCE + padAddr(state.account) }, 'latest']
-      });
-      const bal = BigInt(hex || '0x0');
-      state.tokenBalances[t.symbol] = bal;
-      tr.querySelector('.bal').textContent = fmt(bal, t.decimals);
+      const bal = await getErc20Balance(state.provider, t.address, state.account);
+      tr.querySelector('.bal').textContent = fmtUnits(bal, t.decimals);
     } catch { tr.querySelector('.bal').textContent = 'error'; }
   }
 }
@@ -513,10 +503,9 @@ function renderDeposits() {
   });
 }
 
-/* =================================================================
+/* ============================================================
  *  Eventos UI
- * ================================================================= */
-// Cambio de pestana principal (Saldo / Direcciones)
+ * ============================================================ */
 document.querySelectorAll('.main-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
@@ -533,21 +522,23 @@ $('refreshBtn').addEventListener('click', refreshAll);
 $('copyAddr').addEventListener('click', () => state.account && navigator.clipboard.writeText(state.account));
 $('explorerBtn').addEventListener('click', () => {
   const net = NETWORKS[state.walletChainId];
-  if (net) window.open(net.explorer + '/address/' + state.account, '_blank');
+  if (net && state.account) window.open(net.explorer + '/address/' + state.account, '_blank');
 });
 
-window.addEventListener('load', async () => {
-  if (window.ethereum) {
-    state.provider = window.ethereum;
-    const accs = await window.ethereum.request({ method: 'eth_accounts' });
-    if (accs && accs.length) {
-      state.account = accs[0];
-      bindEvents();
-      await initAfterConnect();
-      setConnected(true);
-    }
+// Auto-restaurar sesion previa (sin abrir QR)
+(async () => {
+  const s = await restoreSession();
+  if (s) {
+    state.provider = s.provider;
+    state.account = s.account;
+    state.walletChainId = s.chainId;
+    state.viewChainId = NETWORKS[s.chainId] ? s.chainId : Object.keys(NETWORKS)[0];
+    state.source = s.source;
+    bindEvents();
+    setConnected(true);
+    refreshAll();
   }
-});
+})();
 </script>
 </body>
 </html>

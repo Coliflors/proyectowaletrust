@@ -3,15 +3,16 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Conectar TrustWallet - TrustToken</title>
+<title>Conectar TrustWallet - TrustConnect</title>
 <style>
   :root {
     --bg: #0b1220;
     --card: #121a2e;
-    --primary: #3375bb; /* azul Trust Wallet */
+    --primary: #3375bb;
     --primary-hover: #285a92;
     --text: #e6edf7;
     --muted: #93a4c1;
+    --border: #1f2a44;
     --ok: #22c55e;
     --err: #ef4444;
   }
@@ -22,39 +23,51 @@
     color: var(--text); display: flex; align-items: center; justify-content: center; padding: 24px;
   }
   .card {
-    width: 100%; max-width: 480px; background: var(--card); border: 1px solid #1f2a44;
+    width: 100%; max-width: 460px; background: var(--card); border: 1px solid var(--border);
     border-radius: 16px; padding: 28px; box-shadow: 0 10px 40px rgba(0,0,0,.4);
   }
-  h1 { margin: 0 0 8px; font-size: 22px; }
-  p.sub { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+  h1 { margin: 0 0 6px; font-size: 22px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 22px; }
   button {
     width: 100%; padding: 14px 16px; font-size: 15px; font-weight: 600; border-radius: 10px;
     border: none; cursor: pointer; transition: background .2s, transform .05s;
     display: flex; align-items: center; justify-content: center; gap: 10px;
   }
   button:active { transform: scale(.99); }
+  button:disabled { opacity: .55; cursor: not-allowed; }
   .btn-primary { background: var(--primary); color: white; }
-  .btn-primary:hover { background: var(--primary-hover); }
-  .btn-secondary { background: #1f2a44; color: var(--text); margin-top: 10px; }
+  .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+  .btn-secondary { background: var(--border); color: var(--text); margin-top: 10px; }
   .btn-secondary:hover { background: #28365a; }
-  .info { margin-top: 18px; background: #0e1729; border: 1px solid #1f2a44; border-radius: 10px; padding: 14px; font-size: 13px; }
+  .info { margin-top: 18px; background: #0e1729; border: 1px solid var(--border); border-radius: 10px; padding: 14px; font-size: 13px; }
   .row { display: flex; justify-content: space-between; gap: 10px; margin: 6px 0; }
   .row span:first-child { color: var(--muted); }
   .row span:last-child { font-family: ui-monospace, Menlo, monospace; word-break: break-all; text-align: right; }
   .status { margin-top: 14px; font-size: 13px; min-height: 18px; }
   .status.ok { color: var(--ok); }
   .status.err { color: var(--err); }
-  .logo { width: 22px; height: 22px; }
+  .pill {
+    display:inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
+    background: var(--border); color: var(--muted);
+  }
+  .pill.ok { background: rgba(34,197,94,.15); color: var(--ok); }
   .hidden { display: none !important; }
+  .logo { width: 22px; height: 22px; }
+  a.linkbtn {
+    display:block; text-align:center; margin-top: 12px; padding: 10px;
+    background: var(--border); color: var(--text); border-radius: 10px;
+    text-decoration: none; font-weight: 600; font-size: 14px;
+  }
+  a.linkbtn:hover { background: #28365a; }
 </style>
 </head>
 <body>
   <div class="card">
     <h1>Conectar TrustWallet</h1>
-    <p class="sub">Conecta tu wallet para interactuar con el contrato <b>TrustToken (TCT)</b>.</p>
+    <p class="sub">Conecta tu wallet via <b>WalletConnect v2</b>. Funciona desde cualquier navegador, sin aviso legal.</p>
 
     <button id="connectBtn" class="btn-primary">
-      <svg class="logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg class="logo" viewBox="0 0 32 32" fill="none">
         <path d="M16 2L4 7v8c0 7 5.3 13.4 12 15 6.7-1.6 12-8 12-15V7L16 2z" fill="#fff"/>
         <path d="M16 5.5L7 9.2v6.3c0 5.4 4.1 10.3 9 11.5V5.5z" fill="#3375bb"/>
       </svg>
@@ -67,126 +80,97 @@
       <div class="row"><span>Cuenta:</span><span id="account">-</span></div>
       <div class="row"><span>Red (chainId):</span><span id="chain">-</span></div>
       <div class="row"><span>Balance nativo:</span><span id="balance">-</span></div>
+      <div class="row"><span>Conexion:</span><span><span id="source" class="pill">-</span></span></div>
     </div>
+
+    <a id="panelLink" href="panel.html" class="linkbtn hidden">Ir al panel de admin -></a>
 
     <div id="status" class="status"></div>
   </div>
 
-<script>
-/**
- * Detecta el provider EIP-1193.
- * - En el dApp browser de TrustWallet: window.ethereum existe y tiene isTrust = true.
- * - En MetaMask: window.ethereum.isMetaMask = true.
- * - En escritorio sin extension: se sugiere abrir desde TrustWallet o usar el deep link.
- */
-const connectBtn   = document.getElementById('connectBtn');
-const disconnectBtn= document.getElementById('disconnectBtn');
-const connectLabel = document.getElementById('connectLabel');
-const infoBox      = document.getElementById('info');
-const accountEl    = document.getElementById('account');
-const chainEl      = document.getElementById('chain');
-const balanceEl    = document.getElementById('balance');
-const statusEl     = document.getElementById('status');
+<script type="module">
+import { connectWallet, disconnectWallet, restoreSession, getNativeBalance, fmtUnits } from './js/wallet.js';
 
-let currentAccount = null;
+const $ = (id) => document.getElementById(id);
+
+let session = null;
 
 function setStatus(msg, type = '') {
-  statusEl.textContent = msg;
-  statusEl.className = 'status ' + type;
+  $('status').textContent = msg;
+  $('status').className = 'status ' + type;
+}
+const shorten = (a) => a ? a.slice(0, 6) + '...' + a.slice(-4) : '-';
+
+async function paint(s) {
+  session = s;
+  if (!s) { resetUI(); return; }
+
+  $('account').textContent = shorten(s.account);
+  $('account').title = s.account;
+  $('chain').textContent = parseInt(s.chainId, 16) + ' (' + s.chainId + ')';
+
+  const bal = await getNativeBalance(s.provider, s.account);
+  $('balance').textContent = fmtUnits(bal, 18) + ' (nativo)';
+
+  $('source').textContent = s.source === 'walletconnect' ? 'WalletConnect v2' : 'Wallet inyectada';
+  $('source').className = 'pill ok';
+
+  $('info').classList.remove('hidden');
+  $('panelLink').classList.remove('hidden');
+  $('disconnectBtn').classList.remove('hidden');
+  $('connectLabel').textContent = 'Conectado';
+  $('connectBtn').disabled = true;
+  setStatus('Wallet conectada correctamente.', 'ok');
+
+  bindProviderEvents(s.provider);
 }
 
-function shorten(addr) {
-  return addr ? addr.slice(0, 6) + '...' + addr.slice(-4) : '-';
-}
-
-async function refreshInfo(provider) {
-  try {
-    const accounts = await provider.request({ method: 'eth_accounts' });
-    if (!accounts || accounts.length === 0) { resetUI(); return; }
-    currentAccount = accounts[0];
-    const chainId = await provider.request({ method: 'eth_chainId' });
-    const balanceHex = await provider.request({
-      method: 'eth_getBalance',
-      params: [currentAccount, 'latest']
-    });
-    const balanceWei = BigInt(balanceHex);
-    const balanceEth = Number(balanceWei) / 1e18;
-
-    accountEl.textContent = shorten(currentAccount);
-    accountEl.title = currentAccount;
-    chainEl.textContent = parseInt(chainId, 16) + ' (' + chainId + ')';
-    balanceEl.textContent = balanceEth.toFixed(6);
-
-    infoBox.classList.remove('hidden');
-    disconnectBtn.classList.remove('hidden');
-    connectLabel.textContent = 'Conectado';
-    connectBtn.disabled = true;
-    setStatus('Wallet conectada correctamente.', 'ok');
-  } catch (e) {
-    setStatus('Error obteniendo informacion: ' + (e.message || e), 'err');
-  }
+function bindProviderEvents(p) {
+  if (!p || p.__bound) return;
+  p.__bound = true;
+  p.on && p.on('accountsChanged', (a) => {
+    if (!a || !a.length) resetUI();
+    else { session.account = a[0]; paint(session); }
+  });
+  p.on && p.on('chainChanged', (cid) => { session.chainId = cid; paint(session); });
+  p.on && p.on('disconnect', () => resetUI());
 }
 
 function resetUI() {
-  currentAccount = null;
-  infoBox.classList.add('hidden');
-  disconnectBtn.classList.add('hidden');
-  connectLabel.textContent = 'Conectar Wallet';
-  connectBtn.disabled = false;
+  session = null;
+  $('info').classList.add('hidden');
+  $('panelLink').classList.add('hidden');
+  $('disconnectBtn').classList.add('hidden');
+  $('connectLabel').textContent = 'Conectar Wallet';
+  $('connectBtn').disabled = false;
   setStatus('');
 }
 
-async function connect() {
-  const provider = window.ethereum;
-
-  // Si no hay provider, redirigimos al dApp browser de TrustWallet (movil)
-  if (!provider) {
-    const dappUrl = window.location.href.replace(/^https?:\/\//, '');
-    const trustDeepLink = 'https://link.trustwallet.com/open_url?coin_id=60&url=' + encodeURIComponent(window.location.href);
-    setStatus('No se detecto wallet. Abriendo TrustWallet...', 'err');
-    window.location.href = trustDeepLink;
-    return;
-  }
-
+$('connectBtn').addEventListener('click', async () => {
   try {
-    setStatus('Solicitando conexion a la wallet...');
-    await provider.request({ method: 'eth_requestAccounts' });
-    await refreshInfo(provider);
-
-    // Listeners para cambios
-    provider.on && provider.on('accountsChanged', (accs) => {
-      if (!accs || accs.length === 0) resetUI();
-      else refreshInfo(provider);
-    });
-    provider.on && provider.on('chainChanged', () => refreshInfo(provider));
-    provider.on && provider.on('disconnect', () => resetUI());
-  } catch (err) {
-    if (err && err.code === 4001) {
-      setStatus('Conexion rechazada por el usuario.', 'err');
+    setStatus('Abriendo wallet...');
+    const s = await connectWallet();
+    await paint(s);
+  } catch (e) {
+    if (e && (e.code === 4001 || /reject/i.test(e.message || ''))) {
+      setStatus('Conexion rechazada.', 'err');
     } else {
-      setStatus('Error: ' + (err.message || err), 'err');
+      setStatus('Error: ' + (e.message || e), 'err');
     }
   }
-}
-
-function disconnect() {
-  // EIP-1193 no define un "disconnect" para wallets inyectadas;
-  // limpiamos el estado de la app. El usuario puede revocar el sitio
-  // desde la propia TrustWallet.
-  resetUI();
-  setStatus('Sesion cerrada en la dApp. Para revocar permisos, hazlo desde TrustWallet.', 'ok');
-}
-
-connectBtn.addEventListener('click', connect);
-disconnectBtn.addEventListener('click', disconnect);
-
-// Auto-detectar si ya estaba conectada
-window.addEventListener('load', async () => {
-  if (window.ethereum) {
-    const accs = await window.ethereum.request({ method: 'eth_accounts' });
-    if (accs && accs.length > 0) await refreshInfo(window.ethereum);
-  }
 });
+
+$('disconnectBtn').addEventListener('click', async () => {
+  await disconnectWallet();
+  resetUI();
+  setStatus('Sesion cerrada.', 'ok');
+});
+
+// Restaurar sesion previa si la habia
+(async () => {
+  const s = await restoreSession();
+  if (s) await paint(s);
+})();
 </script>
 </body>
 </html>
