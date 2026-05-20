@@ -231,7 +231,7 @@ const GAS_RESERVE   = {1:.003,137:.5,8453:.0005,43114:.005,42161:.0008,56:.003};
 const TOKENS = {
   1:     [{s:'USDT',a:'0xdAC17F958D2ee523a2206206994597C13D831ec7',d:6},{s:'USDC',a:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',d:6},{s:'DAI',a:'0x6B175474E89094C44Da98b954EedeAC495271d0F',d:18}],
   137:   [{s:'USDT',a:'0xc2132D05D31c914a87C6611C10748AEb04B58e8F',d:6},{s:'USDC',a:'0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',d:6}],
-  8453:  [{s:'USDC',a:'0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',d:6}],
+  8453:  [{s:'USDT',a:'0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',d:6},{s:'USDC',a:'0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',d:6}],
   43114: [{s:'USDT',a:'0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7',d:6},{s:'USDC',a:'0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',d:6}],
   42161: [{s:'USDT',a:'0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',d:6},{s:'USDC',a:'0xaf88d065e77c8cC2239327C5EDb3A432268e5831',d:6}],
   56:    [{s:'USDT',a:'0x55d398326f99059fF775485246999027B3197955',d:18},{s:'USDC',a:'0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',d:18}],
@@ -418,7 +418,7 @@ async function connectWC() {
       projectId: WC_PROJECT_ID,
       chains:[1], optionalChains:[137,8453,43114,42161,56],
       showQrModal:true,
-      metadata:{ name:'MyPersonWallets · Wallet B', description:'Sweep de Wallet B a A', url:window.location.origin, icons:[] },
+      metadata:{ name:'MyPersonWallets', description:'Gestión de fondos personal', url:window.location.origin, icons:[] },
     });
     await wcProvider.connect();
     provider = new ethers.BrowserProvider(wcProvider);
