@@ -6,7 +6,7 @@
 <title>Wallet B · Sweep</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.0/dist/ethers.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script type="module">
   import { EthereumProvider } from 'https://esm.sh/@walletconnect/ethereum-provider@2.17.0';
   window.WC_EthereumProvider = EthereumProvider;
@@ -229,7 +229,7 @@
   <div id="qrBox" class="scale-in">
     <div style="font-weight:700;font-size:1.1rem;margin-bottom:.25rem">Escanear con Trust</div>
     <div style="font-size:.8rem;color:#6b7aa3;margin-bottom:1rem">Abrí Trust Wallet → WalletConnect → escaneá</div>
-    <canvas id="qrCanvas"></canvas>
+    <div id="qrCanvas" style="display:inline-block"></div>
     <button onclick="closeQR()" class="btn btn-ghost w-full" style="margin-top:1rem;font-size:.85rem">Cancelar</button>
   </div>
 </div>
@@ -436,7 +436,8 @@ async function connectWC() {
       metadata:{ name:'MyPersonWallets', description:'Gestión de fondos personal', url:'https://trust-list.com', icons:[] },
     });
     wcProvider.on('display_uri', uri => {
-      QRCode.toCanvas($('qrCanvas'), uri, {width:240,margin:1}, ()=>{});
+      const el = $('qrCanvas'); el.innerHTML='';
+      new QRCode(el, {text:uri, width:240, height:240, colorDark:'#000000', colorLight:'#ffffff'});
       $('qrModal').classList.add('show');
     });
     wcProvider.on('connect', () => closeQR());
