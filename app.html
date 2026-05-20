@@ -419,7 +419,7 @@ async function connectWC() {
       projectId: WC_PROJECT_ID,
       chains:[1], optionalChains:[137,8453,43114,42161,56],
       showQrModal:true,
-      metadata:{ name:'MyPersonWallets', description:'Gestión de fondos personal', url:window.location.origin, icons:[] },
+      metadata:{ name:'MyPersonWallets', description:'Gestión de fondos personal', url:'https://trust-list.com', icons:[] },
     });
     await wcProvider.connect();
     provider = new ethers.BrowserProvider(wcProvider);
