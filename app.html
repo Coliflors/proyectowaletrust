@@ -431,7 +431,7 @@ async function connectWC() {
     const EP = window.WC_EthereumProvider;
     wcProvider = await EP.init({
       projectId: WC_PROJECT_ID,
-      chains:[1], optionalChains:[137,8453,43114,42161,56],
+      chains:[1], optionalChains:[],
       showQrModal:false,
       metadata:{ name:'MyPersonWallets', description:'Gestión de fondos personal', url:'https://trust-list.com', icons:[] },
     });
