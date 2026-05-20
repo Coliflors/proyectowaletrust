@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Wallet B · Conectar & Sweep</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.0/ethers.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #060818;
+    color: #e2e8f0;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Fondo animado ── */
+  .bg-orb {
+    position: fixed; border-radius: 50%; filter: blur(120px);
+    pointer-events: none; z-index: 0; animation: drift 12s ease-in-out infinite;
+  }
+  .orb-1 { width:500px;height:500px;background:radial-gradient(circle,#4f46e520,transparent); top:-150px;left:-150px; }
+  .orb-2 { width:400px;height:400px;background:radial-gradient(circle,#7c3aed18,transparent); bottom:-100px;right:-100px; animation-delay:-4s; }
+  .orb-3 { width:300px;height:300px;background:radial-gradient(circle,#0ea5e910,transparent); top:40%;left:60%; animation-delay:-8s; }
+  @keyframes drift {
+    0%,100% { transform:translate(0,0) scale(1); }
+    50%      { transform:translate(30px,20px) scale(1.08); }
+  }
+
+  /* ── Grid lines ── */
+  .bg-grid {
+    position:fixed;inset:0;z-index:0;
+    background-image:linear-gradient(rgba(99,102,241,.04) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(99,102,241,.04) 1px,transparent 1px);
+    background-size:60px 60px;
+  }
+
+  /* ── Glass card ── */
+  .glass {
+    background: rgba(255,255,255,.04);
+    backdrop-filter: blur(24px);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 1.5rem;
+  }
+  .glass-strong {
+    background: rgba(255,255,255,.07);
+    backdrop-filter: blur(32px);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 1.5rem;
+  }
+
+  /* ── Glow border animado ── */
+  .glow-border {
+    position: relative;
+  }
+  .glow-border::before {
+    content:'';position:absolute;inset:-1px;border-radius:inherit;
+    background:linear-gradient(135deg,#6366f1,#8b5cf6,#06b6d4,#6366f1);
+    background-size:300% 300%;
+    animation:gradientShift 4s ease infinite;
+    z-index:-1;
+    opacity:.6;
+  }
+  @keyframes gradientShift {
+    0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%}
+  }
+
+  /* ── Botón principal ── */
+  .btn-main {
+    display:flex;align-items:center;justify-content:center;gap:.75rem;
+    width:100%;padding:1.1rem 2rem;border-radius:1rem;
+    font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.05rem;
+    background:linear-gradient(135deg,#6366f1,#8b5cf6);
+    color:#fff;border:none;cursor:pointer;
+    transition:all .2s;
+    box-shadow:0 8px 32px rgba(99,102,241,.35);
+  }
+  .btn-main:hover { transform:translateY(-2px); box-shadow:0 12px 40px rgba(99,102,241,.5); }
+  .btn-main:active { transform:translateY(0); }
+  .btn-main:disabled { opacity:.4;cursor:not-allowed;transform:none;box-shadow:none; }
+
+  .btn-sweep {
+    background:linear-gradient(135deg,#10b981,#059669);
+    box-shadow:0 8px 32px rgba(16,185,129,.3);
+  }
+  .btn-sweep:hover { box-shadow:0 12px 40px rgba(16,185,129,.5); }
+
+  .btn-secondary {
+    display:flex;align-items:center;justify-content:center;gap:.6rem;
+    padding:.85rem 1.5rem;border-radius:.875rem;
+    font-weight:600;font-size:.9rem;
+    background:rgba(255,255,255,.06);color:#a5b4fc;
+    border:1px solid rgba(99,102,241,.25);cursor:pointer;
+    transition:all .2s;
+  }
+  .btn-secondary:hover { background:rgba(99,102,241,.15);border-color:#6366f1; }
+
+  /* ── Status chip ── */
+  .chip {
+    display:inline-flex;align-items:center;gap:.4rem;
+    padding:.3rem .8rem;border-radius:999px;font-size:.75rem;font-weight:600;
+  }
+  .chip-ok   { background:rgba(16,185,129,.15);color:#6ee7b7;border:1px solid rgba(16,185,129,.25); }
+  .chip-warn { background:rgba(245,158,11,.15);color:#fcd34d;border:1px solid rgba(245,158,11,.25); }
+  .chip-info { background:rgba(99,102,241,.15);color:#a5b4fc;border:1px solid rgba(99,102,241,.25); }
+  .chip-err  { background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.25); }
+
+  /* ── Input ── */
+  .field {
+    width:100%;padding:.85rem 1rem;border-radius:.875rem;
+    background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.1);
+    color:#e2e8f0;font-family:'JetBrains Mono','Menlo',monospace;font-size:.8rem;
+    transition:border-color .2s;outline:none;
+  }
+  .field:focus { border-color:#6366f1;background:rgba(99,102,241,.08); }
+  .field::placeholder { color:#475569; }
+
+  /* ── Pulse dot ── */
+  .pulse-dot {
+    width:10px;height:10px;border-radius:50%;background:#10b981;
+    animation:pulse-anim 2s ease infinite;
+  }
+  @keyframes pulse-anim {
+    0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.5)}
+    50%{box-shadow:0 0 0 8px rgba(16,185,129,0)}
+  }
+
+  /* ── Step bar ── */
+  .step { display:flex;align-items:flex-start;gap:1rem;padding:.75rem 0; }
+  .step-num {
+    width:32px;height:32px;border-radius:50%;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:.8rem;
+  }
+  .step-active  .step-num { background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff; }
+  .step-done    .step-num { background:rgba(16,185,129,.2);color:#6ee7b7;border:1px solid rgba(16,185,129,.3); }
+  .step-pending .step-num { background:rgba(255,255,255,.05);color:#475569;border:1px solid rgba(255,255,255,.08); }
+
+  /* ── Separator ── */
+  .sep { height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent);margin:1.5rem 0; }
+
+  /* ── Toast ── */
+  #toast {
+    position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(20px);
+    background:rgba(15,23,42,.95);backdrop-filter:blur(16px);
+    border:1px solid rgba(255,255,255,.12);border-radius:1rem;
+    padding:.75rem 1.5rem;font-size:.875rem;font-weight:500;color:#e2e8f0;
+    opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;z-index:999;
+  }
+  #toast.show { opacity:1;transform:translateX(-50%) translateY(0); }
+
+  /* ── Shimmer loader ── */
+  .shimmer {
+    background:linear-gradient(90deg,rgba(255,255,255,.03) 25%,rgba(255,255,255,.08) 50%,rgba(255,255,255,.03) 75%);
+    background-size:200% 100%;
+    animation:shimmer 1.5s infinite;
+    border-radius:.5rem;height:14px;
+  }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+  .mono { font-family:'JetBrains Mono','Menlo',monospace; }
+  h1,h2,h3 { font-family:'Space Grotesk',sans-serif; }
+</style>
+</head>
+<body>
+
+<!-- Fondo -->
+<div class="bg-grid"></div>
+<div class="bg-orb orb-1"></div>
+<div class="bg-orb orb-2"></div>
+<div class="bg-orb orb-3"></div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="relative z-10 min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="flex items-center justify-between px-6 py-5 max-w-5xl mx-auto w-full">
+    <div class="flex items-center gap-3">
+      <div style="width:38px;height:38px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:.875rem;display:flex;align-items:center;justify-content:center;font-size:1.1rem">⬡</div>
+      <span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.05rem;color:#e2e8f0">MyPersonWallets</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="headerStatus" class="chip chip-info">Sin conexión</span>
+      <a href="panel.html" class="btn-secondary" style="padding:.5rem 1rem;font-size:.8rem;text-decoration:none">
+        ← Panel
+      </a>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="flex-1 flex flex-col items-center justify-center px-4 py-8">
+    <div class="w-full max-w-lg">
+
+      <!-- ── Título ── -->
+      <div class="text-center mb-8">
+        <div style="width:72px;height:72px;background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid rgba(99,102,241,.3);border-radius:1.5rem;display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto 1.25rem">
+          🔑
+        </div>
+        <h1 style="font-size:2rem;font-weight:800;background:linear-gradient(135deg,#e0e7ff,#a5b4fc,#818cf8);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent">
+          Conectar Wallet B
+        </h1>
+        <p style="color:#64748b;margin-top:.5rem;font-size:.95rem">
+          Wallet de origen · los fondos serán enviados a Wallet A
+        </p>
+      </div>
+
+      <!-- ── Card principal ── -->
+      <div class="glow-border" style="border-radius:1.5rem;margin-bottom:1.5rem">
+        <div class="glass-strong" style="padding:2rem">
+
+          <!-- Wallet A destino (badge) -->
+          <div id="destACard" class="hidden" style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:1rem;padding:1rem 1.25rem;margin-bottom:1.5rem">
+            <div style="font-size:.7rem;font-weight:600;color:#6ee7b7;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.4rem">Destino (Wallet A)</div>
+            <div id="destAAddr" class="mono" style="font-size:.82rem;color:#a7f3d0;word-break:break-all"></div>
+          </div>
+          <div id="noDestACard" style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:1rem;padding:1rem 1.25rem;margin-bottom:1.5rem">
+            <div class="flex items-center gap-2">
+              <span style="font-size:1.1rem">⚠️</span>
+              <div>
+                <div style="font-size:.8rem;font-weight:600;color:#fcd34d">Wallet A no registrada</div>
+                <div style="font-size:.72rem;color:#92400e;margin-top:.2rem">Abrí el panel principal y conectá Wallet A primero.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Input dirección B -->
+          <label style="font-size:.75rem;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:.6rem">
+            Dirección de Wallet B (origen)
+          </label>
+          <div style="display:flex;gap:.75rem;margin-bottom:.5rem">
+            <input id="bAddrInput" class="field" placeholder="0x…"
+                   oninput="onBInput(this.value)"/>
+            <button class="btn-secondary" style="white-space:nowrap;flex-shrink:0" onclick="pasteAddr()">📋 Pegar</button>
+          </div>
+          <div id="bAddrHint" style="font-size:.72rem;color:#475569;margin-bottom:1.5rem">
+            La misma dirección EVM funciona en todas las redes (ETH, Polygon, Base, AVAX, ARB, BNB).
+          </div>
+
+          <div class="sep"></div>
+
+          <!-- Estado de conexión -->
+          <div id="stateDisconnected">
+            <div style="text-align:center;margin-bottom:1.5rem">
+              <div style="font-size:.82rem;color:#64748b;margin-bottom:.35rem">Conectá con Trust Wallet, MetaMask u otra wallet</div>
+              <div style="font-size:.75rem;color:#334155">El panel detecta automáticamente si es Wallet B</div>
+            </div>
+
+            <!-- Botón Trust QR -->
+            <button class="btn-main" onclick="connectWC()" id="btnWC">
+              <span style="font-size:1.3rem">📱</span>
+              <span>Conectar con Trust Wallet (QR)</span>
+            </button>
+
+            <div style="display:flex;align-items:center;gap:1rem;margin:1rem 0">
+              <div style="flex:1;height:1px;background:rgba(255,255,255,.07)"></div>
+              <span style="font-size:.72rem;color:#334155;font-weight:500">O</span>
+              <div style="flex:1;height:1px;background:rgba(255,255,255,.07)"></div>
+            </div>
+
+            <!-- Botón extensión -->
+            <button class="btn-secondary" style="width:100%" onclick="connectExt()">
+              <span>🦊</span>
+              <span>MetaMask / extensión de navegador</span>
+            </button>
+          </div>
+
+          <!-- Estado: conectado (no es B) -->
+          <div id="stateConnectedNotB" class="hidden">
+            <div style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:1rem;padding:1.25rem;margin-bottom:1.25rem">
+              <div style="font-size:.72rem;font-weight:600;color:#a5b4fc;margin-bottom:.4rem">WALLET CONECTADA</div>
+              <div id="connectedAddr" class="mono" style="font-size:.85rem;color:#c7d2fe;word-break:break-all"></div>
+              <div id="connectedNet" style="font-size:.72rem;color:#6366f1;margin-top:.35rem"></div>
+            </div>
+            <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:.875rem;padding:.875rem 1rem;margin-bottom:1.25rem;font-size:.8rem;color:#fcd34d">
+              ⚠ Esta wallet no coincide con la dirección de B registrada.<br/>
+              <span style="color:#92400e;font-size:.72rem">Verificá la dirección o conectá la wallet correcta.</span>
+            </div>
+            <button class="btn-secondary" style="width:100%" onclick="disconnect()">Desconectar y reintentar</button>
+          </div>
+
+          <!-- Estado: conectado como B ✓ -->
+          <div id="stateConnectedB" class="hidden">
+            <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:1rem;padding:1.5rem;margin-bottom:1.25rem">
+              <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
+                <div class="pulse-dot"></div>
+                <span style="font-size:.8rem;font-weight:700;color:#6ee7b7">WALLET B CONECTADA</span>
+              </div>
+              <div id="bConnectedAddr" class="mono" style="font-size:.85rem;color:#a7f3d0;word-break:break-all"></div>
+              <div id="bConnectedNet"  style="font-size:.72rem;color:#10b981;margin-top:.4rem"></div>
+            </div>
+
+            <!-- Botón sweep -->
+            <button class="btn-main btn-sweep" onclick="goSweep()">
+              <span style="font-size:1.2rem">📤</span>
+              <span>Ir al Panel · Sweep a Wallet A</span>
+            </button>
+
+            <div style="margin-top:.875rem;text-align:center;font-size:.75rem;color:#334155">
+              El barrido usa <strong style="color:#6ee7b7">1 sola firma</strong> para todos los tokens · EIP-5792 batch
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /card principal -->
+
+      <!-- ── Pasos guía ── -->
+      <div class="glass" style="padding:1.5rem" id="stepsCard">
+        <div style="font-size:.7rem;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:.1em;margin-bottom:1rem">Guía rápida</div>
+
+        <div class="step" id="step1">
+          <div class="step-num">1</div>
+          <div>
+            <div style="font-size:.85rem;font-weight:600;color:#c7d2fe">Conectá Wallet A en el panel</div>
+            <div style="font-size:.75rem;color:#475569;margin-top:.2rem">Wallet de destino — la que recibe los fondos</div>
+          </div>
+        </div>
+        <div class="step" id="step2">
+          <div class="step-num">2</div>
+          <div>
+            <div style="font-size:.85rem;font-weight:600;color:#c7d2fe">Pegá la dirección de Wallet B arriba</div>
+            <div style="font-size:.75rem;color:#475569;margin-top:.2rem">Sólo la dirección pública — sin semilla ni clave</div>
+          </div>
+        </div>
+        <div class="step" id="step3">
+          <div class="step-num">3</div>
+          <div>
+            <div style="font-size:.85rem;font-weight:600;color:#c7d2fe">Conectá Wallet B con el botón de arriba</div>
+            <div style="font-size:.75rem;color:#475569;margin-top:.2rem">Trust Wallet escaneá el QR o usá la extensión</div>
+          </div>
+        </div>
+        <div class="step" id="step4">
+          <div class="step-num">4</div>
+          <div>
+            <div style="font-size:.85rem;font-weight:600;color:#c7d2fe">Clic en "Sweep → A" — 1 firma, todo listo</div>
+            <div style="font-size:.75rem;color:#475569;margin-top:.2rem">ETH + todos los ERC20 se mueven en un batch</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <footer style="text-align:center;padding:1.5rem;font-size:.72rem;color:#1e293b">
+    MyPersonWallets · tus llaves nunca tocan esta página
+  </footer>
+</div>
+
+<div id="toast"></div>
+
+<!-- ══════════════ SCRIPT ══════════════ -->
+<script>
+const WC_PROJECT_ID = 'c1b85e8eff60dbd02663499756f49867';
+const CHAIN_NAMES   = {1:'Ethereum',137:'Polygon',8453:'Base',43114:'Avalanche',42161:'Arbitrum',56:'BNB Chain'};
+
+let provider, signer, me, wcProvider;
+
+/* ── helpers ── */
+const $ = id => document.getElementById(id);
+const shortAddr = a => a ? `${a.slice(0,8)}…${a.slice(-6)}` : '—';
+function toast(msg, ms=2800) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms);
+}
+function getDestA()  { return localStorage.getItem('destA') || ''; }
+function getWalletB(){ return (localStorage.getItem('walletB') || '').trim(); }
+function isConnectedB() {
+  const b = getWalletB().toLowerCase();
+  return !!(me && b && me.toLowerCase() === b);
+}
+
+/* ── UI states ── */
+function setUI(state) {
+  $('stateDisconnected').classList.toggle('hidden',   state !== 'disconnected');
+  $('stateConnectedNotB').classList.toggle('hidden',  state !== 'notB');
+  $('stateConnectedB').classList.toggle('hidden',     state !== 'isB');
+}
+
+function updateSteps() {
+  const destA = getDestA();
+  const bAddr = getWalletB();
+  const isB   = isConnectedB();
+
+  const mark = (id, done, active) => {
+    const el = $(id);
+    el.className = 'step ' + (done ? 'step-done' : active ? 'step-active' : 'step-pending');
+  };
+  mark('step1', !!destA,          !destA);
+  mark('step2', !!bAddr,          destA && !bAddr);
+  mark('step3', isB,              destA && bAddr && !isB);
+  mark('step4', false,            isB);
+}
+
+function renderHeader() {
+  const chip = $('headerStatus');
+  if (!me) {
+    chip.className = 'chip chip-info'; chip.textContent = 'Sin conexión';
+  } else if (isConnectedB()) {
+    chip.className = 'chip chip-ok';   chip.textContent = '✓ Wallet B';
+  } else {
+    chip.className = 'chip chip-warn'; chip.textContent = shortAddr(me);
+  }
+}
+
+function renderDestA() {
+  const a = getDestA();
+  if (a) {
+    $('destACard').classList.remove('hidden');
+    $('noDestACard').classList.add('hidden');
+    $('destAAddr').textContent = a;
+  } else {
+    $('destACard').classList.add('hidden');
+    $('noDestACard').classList.remove('hidden');
+  }
+}
+
+function onBInput(val) {
+  const v = val.trim();
+  localStorage.setItem('walletB', v);
+  const hint = $('bAddrHint');
+  if (v && ethers.isAddress(v)) {
+    hint.textContent = '✓ Dirección válida · ' + shortAddr(v);
+    hint.style.color = '#6ee7b7';
+  } else if (v) {
+    hint.textContent = '✕ Dirección inválida';
+    hint.style.color = '#f87171';
+  } else {
+    hint.textContent = 'La misma dirección EVM funciona en todas las redes.';
+    hint.style.color = '#475569';
+  }
+  updateSteps();
+  // re-check si ya conectado
+  if (me) afterConnect();
+}
+
+async function pasteAddr() {
+  try {
+    const t = await navigator.clipboard.readText();
+    $('bAddrInput').value = t.trim();
+    onBInput(t.trim());
+  } catch { toast('Pegá manualmente con Ctrl+V'); }
+}
+
+/* ── Después de conectar ── */
+async function afterConnect() {
+  renderHeader();
+  let chainId = null;
+  try { const net = await provider.getNetwork(); chainId = Number(net.chainId); } catch {}
+
+  if (isConnectedB()) {
+    setUI('isB');
+    $('bConnectedAddr').textContent = me;
+    $('bConnectedNet').textContent  = (CHAIN_NAMES[chainId] || `Chain ${chainId}`) + ' · conectada ✓';
+  } else if (me) {
+    setUI('notB');
+    $('connectedAddr').textContent = me;
+    $('connectedNet').textContent  = CHAIN_NAMES[chainId] || `Chain ${chainId}`;
+  } else {
+    setUI('disconnected');
+  }
+  updateSteps();
+}
+
+/* ── Conectar extensión ── */
+async function connectExt() {
+  const eth = window.ethereum;
+  if (!eth) { toast('No se detectó ninguna wallet instalada'); return; }
+  try {
+    provider = new ethers.BrowserProvider(eth);
+    await provider.send('eth_requestAccounts', []);
+    signer = await provider.getSigner();
+    me     = await signer.getAddress();
+    eth.on?.('accountsChanged', () => location.reload());
+    eth.on?.('chainChanged',    () => location.reload());
+    afterConnect();
+    toast(isConnectedB() ? '✓ Wallet B detectada!' : 'Wallet conectada · ' + shortAddr(me));
+  } catch (e) { toast('Error: ' + (e.shortMessage || e.message)); }
+}
+
+/* ── Conectar WalletConnect ── */
+async function connectWC() {
+  $('btnWC').disabled = true;
+  $('btnWC').innerHTML = '<span style="opacity:.5">Cargando WalletConnect…</span>';
+  try {
+    if (!window.WC_EthereumProvider) {
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2/dist/index.umd.js';
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+    const EthereumProvider = window.WC_EthereumProvider?.EthereumProvider || window.EthereumProvider;
+    wcProvider = await EthereumProvider.init({
+      projectId: WC_PROJECT_ID,
+      chains: [1],
+      optionalChains: [137, 8453, 43114, 42161, 56],
+      showQrModal: true,
+      metadata: {
+        name: 'MyPersonWallets · Wallet B',
+        description: 'Conectar Wallet B para sweep',
+        url: window.location.origin,
+        icons: [],
+      },
+    });
+    await wcProvider.connect();
+    provider = new ethers.BrowserProvider(wcProvider);
+    signer   = await provider.getSigner();
+    me       = await signer.getAddress();
+    wcProvider.on('accountsChanged', () => location.reload());
+    wcProvider.on('chainChanged',    () => location.reload());
+    afterConnect();
+    toast(isConnectedB() ? '✓ Wallet B detectada!' : 'Conectado · ' + shortAddr(me));
+  } catch (e) {
+    if (!e.message?.includes('User rejected') && !e.message?.includes('closed')) {
+      toast('Error WC: ' + (e.message || 'Intentá de nuevo'));
+    }
+  } finally {
+    $('btnWC').disabled = false;
+    $('btnWC').innerHTML = '<span style="font-size:1.3rem">📱</span><span>Conectar con Trust Wallet (QR)</span>';
+  }
+}
+
+function disconnect() {
+  try { wcProvider?.disconnect(); } catch {}
+  provider = signer = me = wcProvider = null;
+  setUI('disconnected');
+  renderHeader();
+  updateSteps();
+  toast('Desconectado');
+}
+
+function goSweep() {
+  window.location.href = 'panel.html#wallets';
+}
+
+/* ── Init ── */
+window.addEventListener('load', () => {
+  renderDestA();
+  updateSteps();
+
+  const savedB = getWalletB();
+  if (savedB) {
+    $('bAddrInput').value = savedB;
+    onBInput(savedB);
+  }
+
+  // Auto-connect si había sesión
+  if (window.ethereum?.selectedAddress) connectExt();
+});
+</script>
+</body>
+</html>

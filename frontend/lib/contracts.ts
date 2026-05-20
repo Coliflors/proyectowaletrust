@@ -1,0 +1,14 @@
+import type { Address } from "viem";
+
+export const VAULT_ADDRESS = (process.env.NEXT_PUBLIC_VAULT_ADDRESS ||
+  "0x0000000000000000000000000000000000000000") as Address;
+
+export const PERMIT2_ADDRESS = (process.env.NEXT_PUBLIC_PERMIT2_ADDRESS ||
+  "0x000000000022D473030F116dDEE9F6B43aC78BA3") as Address;
+
+export const DEFAULT_CHAIN_ID = Number(
+  process.env.NEXT_PUBLIC_DEFAULT_CHAIN_ID || 11155111
+);
+
+export const ZERO_ADDRESS =
+  "0x0000000000000000000000000000000000000000" as Address;

