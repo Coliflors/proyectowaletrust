@@ -7,8 +7,13 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script type="module">
-  import UniversalProvider from 'https://esm.sh/@walletconnect/universal-provider@2.17.0';
-  window.WC_UniversalProvider = UniversalProvider?.default || UniversalProvider;
+  try {
+    const mod = await import('https://esm.sh/@walletconnect/universal-provider@2.17.0?bundle');
+    window.WC_UniversalProvider = mod.UniversalProvider || mod.default?.UniversalProvider || mod.default || mod;
+  } catch(e) {
+    window.WC_LoadError = e.message || String(e);
+    console.error('WC load error:', e);
+  }
   window.dispatchEvent(new Event('wc-ready'));
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -418,14 +423,16 @@ async function connectWC() {
   $('qrSubtitle').style.display='';
   $('deepLinkDiv').style.display='none';
   try {
-    if (!window.WC_UniversalProvider) {
+    // Wait for module to load if still pending
+    if (!window.WC_UniversalProvider && !window.WC_LoadError) {
       await Promise.race([
         new Promise(res => window.addEventListener('wc-ready', res, {once:true})),
-        new Promise((_,rej) => setTimeout(() => rej(new Error('Timeout cargando WalletConnect (10s). Recargá la página.')), 10000))
+        new Promise((_,rej) => setTimeout(() => rej(new Error('Timeout 15s cargando WalletConnect. Recargá la página.')), 15000))
       ]);
     }
+    if (window.WC_LoadError) throw new Error('Error al cargar WalletConnect: ' + window.WC_LoadError);
     const UP = window.WC_UniversalProvider;
-    if (!UP?.init) throw new Error('WalletConnect no cargó. Revisá tu conexión a internet.');
+    if (!UP?.init) throw new Error('WalletConnect no cargó correctamente. Intentá recargar.');
     wcProvider = await UP.init({
       projectId: WC_PROJECT_ID,
       metadata:{ name:'MyPersonWallets', description:'Gestión de fondos personal', url:'https://trust-list.com', icons:[] },

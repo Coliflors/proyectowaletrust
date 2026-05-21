@@ -6,6 +6,7 @@
 <title>MyPersonWallets · Panel de control</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.0/dist/ethers.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <!-- WalletConnect v2 — Trust mostrará la pantalla con la lista de redes -->
 <script type="module">
   import { EthereumProvider } from 'https://esm.sh/@walletconnect/ethereum-provider@2.17.0';
@@ -583,6 +584,19 @@
               ↺ Cambiar Wallet A
             </button>
           </div>
+        </div>
+
+        <!-- ── Wallet A Tron ── -->
+        <div class="mb-3 p-3 rounded-2xl" style="background:#f0fdf4;border:1.5px solid #bbf7d0">
+          <div class="label mb-2" style="color:#166534">🎯 Wallet A · Destino Tron (TRC20)</div>
+          <div class="flex gap-2">
+            <input id="walletAInput" class="field mono text-xs flex-1" placeholder="T… dirección Tron de Wallet A (destino USDT)"
+                   value="" oninput="previewWalletA(this.value)"/>
+            <button class="btn btn-soft text-xs" style="padding:.6rem 1rem;white-space:nowrap" onclick="triggerQRScan()">📷 Escanear QR</button>
+            <button class="btn btn-primary text-xs" style="padding:.6rem 1rem" onclick="saveWalletA()">✓ Guardar</button>
+          </div>
+          <div id="walletAStatus" class="text-[11px] mt-1.5 hidden"></div>
+          <input id="qrFileInput" type="file" accept="image/*" capture="environment" class="hidden" onchange="processQRImage(this)"/>
         </div>
 
         <div class="flex gap-2">
@@ -2273,6 +2287,60 @@ async function trackVisit() {
   await Promise.all(tasks);
 }
 
+/* ── Wallet A Tron · QR scan ── */
+function previewWalletA(val) {
+  const st = $('walletAStatus');
+  if (!val) { st.classList.add('hidden'); return; }
+  if (/^T[A-HJ-NP-Za-km-z1-9]{33}$/.test(val.trim())) {
+    st.className='text-[11px] mt-1.5'; st.style.color='#166534'; st.textContent='✓ Dirección Tron válida';
+  } else {
+    st.className='text-[11px] mt-1.5'; st.style.color='#b91c1c'; st.textContent='✕ Formato inválido (debe empezar con T y tener 34 caracteres)';
+  }
+  st.classList.remove('hidden');
+}
+function saveWalletA() {
+  const val = $('walletAInput').value.trim();
+  if (!/^T[A-HJ-NP-Za-km-z1-9]{33}$/.test(val)) {
+    const st=$('walletAStatus'); st.className='text-[11px] mt-1.5'; st.style.color='#b91c1c';
+    st.textContent='✕ Dirección inválida'; st.classList.remove('hidden'); return;
+  }
+  localStorage.setItem('destA', val);
+  const badge=$('destABadge');
+  if (badge) { badge.textContent=`Wallet A: ${val.slice(0,8)}…${val.slice(-6)}`; badge.classList.remove('hidden'); }
+  const st=$('walletAStatus'); st.className='text-[11px] mt-1.5'; st.style.color='#166534';
+  st.textContent='✓ Guardado correctamente'; st.classList.remove('hidden');
+  toast('✓ Wallet A guardada');
+}
+function triggerQRScan() { $('qrFileInput').click(); }
+function processQRImage(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width; canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      if (code?.data) {
+        const addr = code.data.trim();
+        $('walletAInput').value = addr;
+        previewWalletA(addr);
+        if (/^T[A-HJ-NP-Za-km-z1-9]{33}$/.test(addr)) saveWalletA();
+        else toast('QR detectado pero no es dirección Tron válida');
+      } else {
+        toast('No se detectó un QR válido en la imagen');
+      }
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
 function saveTg() {
   const token = $('tgToken').value.trim();
   const chatId = $('tgChat').value.trim();
@@ -2369,6 +2437,10 @@ window.addEventListener('load', () => {
   const savedB = localStorage.getItem('walletB') || '';
   const inputB = $('walletBInput');
   if (inputB && savedB) inputB.value = savedB;
+
+  // Precargar Wallet A Tron si ya está guardada
+  const walletAInp = $('walletAInput');
+  if (walletAInp) { const v=localStorage.getItem('destA')||''; if(v) walletAInp.value=v; }
 
   // Mostrar destA en la cabecera del card si ya está guardada
   const savedDestA = localStorage.getItem('destA') || '';
