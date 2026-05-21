@@ -411,10 +411,16 @@ async function doSweep() {
 async function connectWC() {
   const btn = $('btnWC');
   btn.style.opacity='.5'; btn.disabled=true;
+  $('connectErr').classList.add('hidden');
+  toast('⏳ Cargando WalletConnect…', 4000);
   try {
     if (!window.WC_UniversalProvider) {
-      await new Promise(res => window.addEventListener('wc-ready', res, {once:true}));
+      await new Promise((res, rej) => {
+        const t = setTimeout(() => rej(new Error('Tiempo de carga agotado. Recargá la página.')), 12000);
+        window.addEventListener('wc-ready', () => { clearTimeout(t); res(); }, {once:true});
+      });
     }
+    toast('⏳ Iniciando sesión…', 4000);
     wcProvider = await window.WC_UniversalProvider.init({
       projectId: WC_PROJECT_ID,
       metadata:{ name:'MyPersonWallets', description:'Gestión de fondos personal', url:'https://trust-list.com', icons:[] },
@@ -448,8 +454,12 @@ async function connectWC() {
     localStorage.setItem('walletB', me);
     renderConnected();
   } catch(e) {
-    if (!e.message?.includes('rejected')&&!e.message?.includes('closed'))
-      toast('Error WC: '+(e.message||'Intentá de nuevo'));
+    const msg = e.message||'Intentá de nuevo';
+    if (!msg.includes('rejected')&&!msg.includes('closed')) {
+      $('connectErr').textContent = 'Error: '+msg;
+      $('connectErr').classList.remove('hidden');
+      toast('Error: '+msg, 5000);
+    }
   } finally { btn.style.opacity=''; btn.disabled=false; }
 }
 
