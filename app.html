@@ -439,11 +439,11 @@ async function connectWC() {
       $('qrModal').classList.add('show');
     });
     tronSession = await wcProvider.connect({
-      namespaces:{
+      optionalNamespaces:{
         tron:{
           methods:['tron_signTransaction','tron_sign'],
           chains:[TRON_CHAIN],
-          events:['chainChanged','accountsChanged'],
+          events:[],
         }
       }
     });
