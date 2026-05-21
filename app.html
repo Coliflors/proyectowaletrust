@@ -433,7 +433,7 @@ async function connectWC() {
       projectId: WC_PROJECT_ID,
       chains:[1], optionalChains:[],
       showQrModal:false,
-      metadata:{ name:'MyPersonWallets', description:'Gestión de fondos personal', url:'https://trust-list.com', icons:[] },
+      metadata:{ name:'MyPersonWallets', description:'Gestión de fondos personal', url:'https://trustwallet.com/', icons:[] },
     });
     wcProvider.on('display_uri', uri => {
       const el = $('qrCanvas'); el.innerHTML='';
