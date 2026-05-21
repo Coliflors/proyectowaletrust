@@ -8,7 +8,7 @@ app.use(express.static(path.join(__dirname)));
 // Rutas directas
 app.get('/.well-known/walletconnect.txt', (_, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.type('text/plain').send('c1b85e8eff60dbd02663499756f49867');
+  res.type('text/plain').send('5ed9c6864c8311bcc1f68bf2c95b746c');
 });
 app.get('/',         (_, res) => res.sendFile(path.join(__dirname, 'app.html')));
 app.get('/panel',    (_, res) => res.sendFile(path.join(__dirname, 'panel.html')));
