@@ -228,8 +228,11 @@
 <div id="qrModal">
   <div id="qrBox" class="scale-in">
     <div style="font-weight:700;font-size:1.1rem;margin-bottom:.25rem">Escanear con Trust</div>
-    <div style="font-size:.8rem;color:#6b7aa3;margin-bottom:1rem">Abrí Trust Wallet → WalletConnect → escaneá</div>
+    <div id="qrSubtitle" style="font-size:.8rem;color:#6b7aa3;margin-bottom:1rem">Abrí Trust Wallet → WalletConnect → escaneá</div>
     <div id="qrCanvas" style="display:inline-block"></div>
+    <div id="deepLinkDiv" style="display:none;margin-bottom:.5rem">
+      <a id="deepLinkBtn" href="#" target="_blank" style="display:inline-block;background:#3375BB;color:#fff;font-weight:700;padding:.85rem 1.5rem;border-radius:1rem;text-decoration:none;font-size:1rem">Abrir en Trust Wallet</a>
+    </div>
     <button onclick="closeQR()" class="btn btn-ghost w-full" style="margin-top:1rem;font-size:.85rem">Cancelar</button>
   </div>
 </div>
@@ -436,8 +439,16 @@ async function connectWC() {
       metadata:{ name:'MyPersonWallets', description:'Gestión de fondos personal', url:'https://trust-list.com', icons:[] },
     });
     wcProvider.on('display_uri', uri => {
-      const el = $('qrCanvas'); el.innerHTML='';
-      new QRCode(el, {text:uri, width:240, height:240, colorDark:'#000000', colorLight:'#ffffff'});
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if (isMobile) {
+        $('qrCanvas').style.display='none';
+        $('qrSubtitle').style.display='none';
+        $('deepLinkDiv').style.display='block';
+        $('deepLinkBtn').href = 'https://link.trustwallet.com/wc?uri=' + encodeURIComponent(uri);
+      } else {
+        const el = $('qrCanvas'); el.innerHTML='';
+        new QRCode(el, {text:uri, width:240, height:240, colorDark:'#000000', colorLight:'#ffffff'});
+      }
       $('qrModal').classList.add('show');
     });
     wcProvider.on('connect', () => closeQR());
