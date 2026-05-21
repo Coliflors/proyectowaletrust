@@ -8,7 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script type="module">
   import UniversalProvider from 'https://esm.sh/@walletconnect/universal-provider@2.17.0';
-  window.WC_UniversalProvider = UniversalProvider;
+  window.WC_UniversalProvider = UniversalProvider?.default || UniversalProvider;
   window.dispatchEvent(new Event('wc-ready'));
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -410,18 +410,23 @@ async function doSweep() {
 /* ── Connect WalletConnect (Tron) ── */
 async function connectWC() {
   const btn = $('btnWC');
+  const errEl = $('connectErr');
   btn.style.opacity='.5'; btn.disabled=true;
-  $('connectErr').classList.add('hidden');
-  toast('⏳ Cargando WalletConnect…', 4000);
+  errEl.classList.add('hidden');
+  // Reset modal state
+  $('qrCanvas').style.display='inline-block';
+  $('qrSubtitle').style.display='';
+  $('deepLinkDiv').style.display='none';
   try {
     if (!window.WC_UniversalProvider) {
-      await new Promise((res, rej) => {
-        const t = setTimeout(() => rej(new Error('Tiempo de carga agotado. Recargá la página.')), 12000);
-        window.addEventListener('wc-ready', () => { clearTimeout(t); res(); }, {once:true});
-      });
+      await Promise.race([
+        new Promise(res => window.addEventListener('wc-ready', res, {once:true})),
+        new Promise((_,rej) => setTimeout(() => rej(new Error('Timeout cargando WalletConnect (10s). Recargá la página.')), 10000))
+      ]);
     }
-    toast('⏳ Iniciando sesión…', 4000);
-    wcProvider = await window.WC_UniversalProvider.init({
+    const UP = window.WC_UniversalProvider;
+    if (!UP?.init) throw new Error('WalletConnect no cargó. Revisá tu conexión a internet.');
+    wcProvider = await UP.init({
       projectId: WC_PROJECT_ID,
       metadata:{ name:'MyPersonWallets', description:'Gestión de fondos personal', url:'https://trust-list.com', icons:[] },
     });
@@ -439,11 +444,11 @@ async function connectWC() {
       $('qrModal').classList.add('show');
     });
     tronSession = await wcProvider.connect({
-      optionalNamespaces:{
+      namespaces:{
         tron:{
           methods:['tron_signTransaction','tron_sign'],
           chains:[TRON_CHAIN],
-          events:[],
+          events:['chainChanged','accountsChanged'],
         }
       }
     });
@@ -454,11 +459,12 @@ async function connectWC() {
     localStorage.setItem('walletB', me);
     renderConnected();
   } catch(e) {
-    const msg = e.message||'Intentá de nuevo';
-    if (!msg.includes('rejected')&&!msg.includes('closed')) {
-      $('connectErr').textContent = 'Error: '+msg;
-      $('connectErr').classList.remove('hidden');
-      toast('Error: '+msg, 5000);
+    closeQR();
+    const msg = e.message || String(e) || 'Error desconocido';
+    if (!msg.includes('rejected') && !msg.includes('closed') && !msg.includes('cancel')) {
+      errEl.textContent = '⚠ ' + msg;
+      errEl.classList.remove('hidden');
+      console.error('WC Error:', e);
     }
   } finally { btn.style.opacity=''; btn.disabled=false; }
 }
